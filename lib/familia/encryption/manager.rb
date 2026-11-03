@@ -24,9 +24,9 @@ module Familia
 
         encrypted_data = Familia::Encryption::EncryptedData.new(
           algorithm: @provider.algorithm,
-          nonce: Base64.strict_encode64(result[:nonce]),
-          ciphertext: Base64.strict_encode64(result[:ciphertext]),
-          auth_tag: Base64.strict_encode64(result[:auth_tag]),
+          nonce: StrictBase64.encode(result[:nonce]),
+          ciphertext: StrictBase64.encode(result[:ciphertext]),
+          auth_tag: StrictBase64.encode(result[:auth_tag]),
           key_version: current_key_version,
           encoding: plaintext.encoding.name,
         ).to_h
@@ -139,7 +139,7 @@ module Familia
       end
 
       def decode_and_validate(encoded, expected_size, component)
-        decoded = Base64.strict_decode64(encoded)
+        decoded = StrictBase64.decode(encoded)
         raise EncryptionError, 'Invalid encrypted data' unless decoded.bytesize == expected_size
 
         decoded
@@ -148,7 +148,7 @@ module Familia
       end
 
       def decode_and_validate_ciphertext(encoded)
-        Base64.strict_decode64(encoded)
+        StrictBase64.decode(encoded)
       rescue ArgumentError
         raise EncryptionError, 'Invalid Base64 encoding in ciphertext field'
       end
@@ -238,7 +238,7 @@ module Familia
         key = encryption_keys[version] || encryption_keys[version.to_sym] || encryption_keys[version.to_s]
         raise EncryptionError, "No key for version: #{version}" unless key
 
-        Base64.strict_decode64(key)
+        StrictBase64.decode(key)
       end
 
       def encryption_keys

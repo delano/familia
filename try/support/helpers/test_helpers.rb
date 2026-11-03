@@ -39,9 +39,10 @@ end
 #   delete_test_dbkeys('widget282*')                # by key pattern
 #   delete_test_dbkeys('test:*', client: source)    # explicit connection
 #
-# A Familia::Horreum subclass contributes the pattern "<prefix>:*" and
-# is cleaned through its own #dbclient, so logical_database is
-# respected. A String is used verbatim as a SCAN MATCH pattern against
+# A Familia::Horreum subclass contributes the pattern "<prefix>:*", with
+# the prefix and delimiter escaped by Familia.escape_glob, and is cleaned
+# through its own #dbclient, so logical_database is respected. A String
+# is used verbatim as a SCAN MATCH pattern against
 # +client+ (default Familia.dbclient). Keys are discovered with SCAN and
 # removed with DEL, so nothing outside the given patterns is touched.
 #
@@ -53,7 +54,7 @@ end
 def delete_test_dbkeys(*targets, client: nil)
   targets.sum do |target|
     if target.is_a?(Class) && target <= Familia::Horreum
-      scan_and_delete_dbkeys("#{target.prefix}#{Familia.delim}*", target.dbclient)
+      scan_and_delete_dbkeys("#{Familia.escape_glob(target.key_prefix)}*", target.dbclient)
     else
       scan_and_delete_dbkeys(target.to_s, client || Familia.dbclient)
     end

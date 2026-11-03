@@ -336,9 +336,11 @@ module Familia
             redis = indexed_class.dbclient
 
             Familia::AtomicOperations.with_rebuild(final_key, redis) do |temp_key, touch|
-              # Use SCAN (not KEYS) for memory efficiency
+              # Use SCAN (not KEYS) for memory efficiency. TYPE keeps only
+              # object hashes: a multi_index bucket set named like an object
+              # key also matches the pattern and cannot be loaded.
               batch = []
-              redis.scan_each(match: pattern, count: batch_size) do |key|
+              redis.scan_each(match: pattern, count: batch_size, type: Familia::Horreum::OBJECT_KEY_TYPE) do |key|
                 batch << key
                 scanned += 1
 

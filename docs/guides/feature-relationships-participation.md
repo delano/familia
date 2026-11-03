@@ -247,6 +247,12 @@ org.unstage_members_instance(membership)
 # → Membership destroyed, removed from staging set
 ```
 
+The lifecycle methods read, save or destroy the through model, so they raise
+`Familia::OperationModeError` inside a `transaction`, `atomic_write` or
+`pipelined` block, before queueing anything. The add and remove methods of any
+`through:` participation do the same. Call them before or after the block. See
+[Transaction Safety](../reference/transaction_safety.md) rule 4.
+
 ### Attribute Handling on Activation
 
 Activation intentionally does **not** auto-merge attributes from the staged model. The application controls what data carries over:

@@ -55,6 +55,8 @@ module Familia
       #   - :reversible [Boolean] Whether the migration has a down method
       #
       def status
+        Familia.assert_replies_available!('Migration::Runner#status')
+
         # Batch fetch all applied migrations with timestamps in a single Redis call
         applied_info = @registry.all_applied.each_with_object({}) do |entry, hash|
           hash[entry[:migration_id]] = entry[:applied_at]
@@ -78,6 +80,8 @@ module Familia
       # @return [Array<Class>] Migration classes that haven't been applied
       #
       def pending
+        Familia.assert_replies_available!('Migration::Runner#pending')
+
         @registry.pending(@migrations)
       end
 
@@ -125,6 +129,8 @@ module Familia
       # @return [Array<Hash>] Results for each migration attempted
       #
       def run(dry_run: false, limit: nil)
+        Familia.assert_replies_available!('Migration::Runner#run')
+
         pending_migrations = topological_sort(pending)
         pending_migrations = pending_migrations.first(limit) if limit
 
@@ -144,11 +150,28 @@ module Familia
       # @return [Hash] Result hash with keys:
       #   - :migration_id [String] The migration identifier
       #   - :dry_run [Boolean] Whether this was a dry run
-      #   - :status [Symbol] :success, :skipped, or :failed
+      #   - :status [Symbol] :success, :skipped, or :failed.
+      #     :skipped means #migration_needed? returned false.
+      #     :success means #migrate returned without raising. Its return
+      #     value is not checked. Unless dry_run is set, the migration is
+      #     then recorded as applied.
+      #     :failed means #migration_needed?, #migrate, or recording the
+      #     migration as applied raised a StandardError, for example
+      #     Familia::SchemaValidatorLoadError from #migrate. When
+      #     #migration_needed? or #migrate raised, the migration is not
+      #     recorded as applied. When recording raised, the registry may
+      #     already list the migration as applied.
       #   - :stats [Hash] Statistics from the migration
       #   - :error [String] Error message (if failed)
+      # @raise [ArgumentError] if given neither a Class nor a String
+      # @raise [Errors::NotFound] if a migration ID is not registered
+      # @raise [Errors::DependencyNotMet] if a dependency is not applied
+      # @raise [StandardError] errors raised while the migration is
+      #   constructed or in its #prepare propagate and produce no result hash
       #
       def run_one(migration_class_or_id, dry_run: false)
+        Familia.assert_replies_available!('Migration::Runner#run_one')
+
         klass = resolve_migration(migration_class_or_id)
 
         # Validate dependencies are applied
@@ -198,6 +221,8 @@ module Familia
       # @raise [Errors::NotReversible] if migration has no down method
       #
       def rollback(migration_id)
+        Familia.assert_replies_available!('Migration::Runner#rollback')
+
         klass = resolve_migration(migration_id)
 
         unless @registry.applied?(migration_id)

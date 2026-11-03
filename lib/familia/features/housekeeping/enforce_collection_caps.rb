@@ -49,7 +49,11 @@ module Familia
 
         # @param obj [Familia::Horreum] the instance under housekeeping
         # @return [Integer, nil] members removed, or nil when nothing trimmed
+        # @raise [Familia::OperationModeError] inside a transaction or
+        #   pipeline, where the trim replies it sums are not available
         def call(obj)
+          Familia.assert_replies_available!('EnforceCollectionCaps#call')
+
           removed = capped_collections(obj).sum do |name, collection|
             enforce(name, collection)
           end

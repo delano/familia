@@ -60,6 +60,7 @@ module Familia
     #   | FiberConnection    | Error             | Error                | Allowed              |
     #   | Provider           | New checkout      | New checkout         | New checkout         |
     #   | Cached             | Error             | Error                | Allowed              |
+    #   | Scoped             | Scope's conn      | Scope's conn         | Scope's conn         |
     #   | Create / Default   | Fresh conn        | Fresh conn           | Fresh conn           |
     #   | ParentDelegation   | Delegated         | Delegated            | Delegated            |
     #   | Standalone         | Allowed           | Allowed              | Allowed              |
@@ -271,6 +272,44 @@ module Familia
 
         Familia.trace :DBCLIENT_FIBER_TRANSACTION, nil, 'Using fiber-local transaction connection'
         Fiber[:familia_transaction]
+      end
+    end
+
+    # Serves the connection a {Familia::Connection::Scope} holds for the
+    # requested URI while the current fiber is inside
+    # {Familia::Connection#with_connection_scope}.
+    #
+    # One client per distinct connection configuration, created on first use
+    # and closed when the scope exits. Outside a scope, after the scope is
+    # released, and in a thread or fiber that did not open the scope, the
+    # handler declines and resolution continues down the chain.
+    #
+    # Placed after ProviderConnectionHandler and CachedConnectionHandler: a
+    # scope governs only the lookups that would otherwise reach
+    # CreateConnectionHandler and mint an unowned client. A connection
+    # provider and a class-level @dbclient keep serving inside a scope.
+    #
+    # Transactions and pipelines are allowed; they run on the scope's client
+    # for that URI, so WATCH, MULTI/EXEC and pipelined commands share one
+    # socket for the whole block.
+    #
+    class ScopedConnectionHandler
+      include Handler
+
+      supports transaction: true, pipelined: true
+
+      def initialize(familia_module = nil)
+        @familia_module = familia_module || Familia
+      end
+
+      def handle(uri)
+        scope = Familia::Connection::Scope.current
+        return nil unless scope
+
+        parsed_uri = @familia_module.normalize_uri(uri)
+        client = scope.client(parsed_uri)
+        Familia.trace :DBCLIENT_SCOPE, nil, "Using scoped connection for #{parsed_uri.serverid}"
+        client
       end
     end
 

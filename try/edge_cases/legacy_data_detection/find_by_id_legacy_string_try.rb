@@ -51,10 +51,10 @@ Familia.instance_variable_get(:@logger).level = Logger::DEBUG
 @record.identifier
 #=> "leg"
 
-## The legacy string is logged with the intended message
+## The legacy string is logged with the key find_by_id read
 @log_output.rewind
 @log_output.read
-#=~> /Legacy plain string in .*LegacyStringFinder#plain \(no dbkey\)/
+#=~> /Legacy plain string in .*LegacyStringFinder#plain \(legacy_string_finder:leg:object\)/
 
 ## find_by_dbkey follows the same path and also loads
 LegacyStringFinder.find_by_dbkey(@key).plain

@@ -416,7 +416,7 @@ user.tags       # Array field correctly deserialized
 ```
 
 **Technical details**:
-- Uses `initialize_with_keyword_args_deserialize_value` internally
+- Deserializes the stored fields (`deserialize_stored_fields`), then assigns them with `initialize_with_keyword_args`
 - JSON deserialization for all field values
 - Proper type preservation (Integer, Boolean, Hash, Array, nil)
 

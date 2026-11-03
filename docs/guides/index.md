@@ -86,7 +86,10 @@ end
 
 ### Connection Pooling (Performance)
 ```ruby
-# Configure connection provider for multi-database pooling
+# Configure connection provider for multi-database pooling. familia does not
+# depend on connection_pool; list it in your Gemfile.
+require 'connection_pool'
+
 POOLS = {}
 POOLS_MUTEX = Mutex.new
 
@@ -98,6 +101,20 @@ Familia.connection_provider = lambda do |uri|
     POOLS[uri] ||= ConnectionPool::Wrapper.new(size: 10, timeout: 5) do
       Redis.new(url: uri) # uri already carries the logical database
     end
+  end
+end
+```
+
+### Connection Scopes (Scripts, Jobs, Tests)
+```ruby
+# Without a provider, each lookup that reaches the fallback creates a new client.
+# A scope holds one client per URI for the block and closes them on exit.
+Familia.with_connection_scope do |client|
+  client.ping
+  custids.each do |custid|
+    customer = Customer.load(custid)
+    customer.plan = 'premium'
+    customer.save
   end
 end
 ```

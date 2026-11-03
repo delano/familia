@@ -27,7 +27,8 @@ module Familia
       # 3. FiberConnectionHandler - Fiber[:familia_connection] (middleware connection)
       # 4. ProviderConnectionHandler - User-defined connection provider
       # 5. CachedConnectionHandler - Horreum model class-level @dbclient
-      # 6. CreateConnectionHandler - Fresh connection creation (fallback)
+      # 6. ScopedConnectionHandler - Connection held by an open Familia.with_connection_scope
+      # 7. CreateConnectionHandler - Fresh connection creation (fallback)
       #
       # Thread-safe lazy initialization using double-checked locking to ensure
       # only a single connection chain is built even under high concurrent load.
@@ -278,6 +279,7 @@ module Familia
 
         # Always check class first for @dbclient since instance-level connections were removed
         @cached_connection_handler ||= Familia::Connection::CachedConnectionHandler.new(klass)
+        @scoped_connection_handler ||= Familia::Connection::ScopedConnectionHandler.new(klass)
         @create_connection_handler ||= Familia::Connection::CreateConnectionHandler.new(klass)
 
         Familia::Connection::ResponsibilityChain.new
@@ -286,6 +288,7 @@ module Familia
           .add_handler(@fiber_connection_handler)
           .add_handler(@provider_connection_handler)
           .add_handler(@cached_connection_handler)
+          .add_handler(@scoped_connection_handler)
           .add_handler(@create_connection_handler)
       end
 

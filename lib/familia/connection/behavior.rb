@@ -249,6 +249,28 @@ module Familia
       def pipeline(&block)
         pipelined(&block)
       end
+
+      # Runs the block inside a connection scope and yields this object's
+      # connection for `uri`.
+      #
+      # Opens `Familia.with_connection_scope` and resolves the yielded client
+      # through this object's own connection chain, so a class-level
+      # `@dbclient` or a `logical_database` setting is honoured. See
+      # {Familia::Connection#with_connection_scope} for the scope semantics.
+      #
+      # @param uri [String, URI, Integer, nil] URI or database number; nil uses
+      #   this object's logical database
+      # @yield [Redis] this object's connection for the block's duration
+      # @return [Object] the block's return value
+      #
+      # @example One connection for a batch of model operations
+      #   Customer.with_connection_scope do
+      #     ids.each { |id| Customer.load(id)&.touch! }
+      #   end
+      #
+      def with_connection_scope(uri = nil)
+        Familia::Connection::Scope.open { yield dbclient(uri) }
+      end
     end
   end
 end

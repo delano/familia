@@ -288,19 +288,7 @@ module Familia
           end
         end
 
-        # Validate expiration value
-        # It's important to raise exceptions here and not just log warnings. We
-        # don't want to silently fail at setting expirations and cause data
-        # retention issues (e.g. not removed in a timely fashion).
-        unless expiration.is_a?(Numeric)
-          raise Familia::Problem,
-                "Default expiration must be a number (#{expiration.class} given for #{self.class})"
-        end
-
-        unless expiration >= 0
-          raise Familia::Problem,
-                "Default expiration must be non-negative (#{expiration} given for #{self.class})"
-        end
+        validate_expiration!(expiration)
 
         # If zero, simply skip setting an expiry for this key. If we were to set
         # 0, Valkey/Redis would drop the key immediately.
@@ -340,7 +328,9 @@ module Familia
 
       # Check if this object's data will expire
       #
-      # @return [Boolean] true if TTL is set, false if data persists indefinitely
+      # @return [Boolean, Redis::Future] true if TTL is set, false if data
+      #   persists indefinitely. Inside a transaction or pipeline, the TTL
+      #   Future (resolves to the TTL in seconds).
       #
       def expires?
         Familia.positive?(ttl)
@@ -349,7 +339,9 @@ module Familia
       # Check if this object's data has expired or will expire soon
       #
       # @param threshold [Numeric] Consider expired if TTL is below this threshold (default: 0)
-      # @return [Boolean] true if expired or expiring soon
+      # @return [Boolean, Redis::Future] true if expired or expiring soon.
+      #   Inside a transaction or pipeline, the TTL Future (resolves to the
+      #   TTL in seconds).
       #
       # @example Check if expired
       #   session.expired?  # => true if TTL <= 0
@@ -358,11 +350,13 @@ module Familia
       #   session.expired?(5.minutes)  # => true if TTL <= 300
       #
       def expired?(threshold = 0)
-        current_ttl = ttl
-        return false if current_ttl == -1 # no expiration set
-        return true  if current_ttl == -2 # key does not exist
-
-        current_ttl <= threshold
+        Familia.transform_reply(ttl) do |current_ttl|
+          case current_ttl
+          when -1 then false # no expiration set
+          when -2 then true  # key does not exist
+          else current_ttl <= threshold
+          end
+        end
       end
 
       # Extend the expiration time by the specified duration
@@ -372,13 +366,18 @@ module Familia
       #
       # @param duration [Numeric] Additional time in seconds
       # @return [Boolean] Success of the operation
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the current TTL the new one is computed from is not available
+      #   until the block completes
       #
       # @example Extend session by 1 hour
       #   session.extend_expiration(1.hour)
       #
       def extend_expiration(duration)
+        Familia.assert_replies_available!("#{self.class}#extend_expiration")
+
         current_ttl = ttl
-        return false unless Familia.positive?(current_ttl) == true # no current expiration set
+        return false unless current_ttl.positive? # no current expiration set
 
         new_ttl = current_ttl + duration.to_f
         expire(new_ttl)
@@ -416,6 +415,8 @@ module Familia
       # but one or more relation keys do not (or vice versa). Queries all
       # keys using pipelined TTL calls for efficiency.
       #
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the report's own pipelined TTL reads cannot run
       # @return [Hash] A hash with :main and :relations keys
       #   - :main [Hash] { key: String, ttl: Integer }
       #   - :relations [Hash{Symbol => Hash}] Each relation name maps to
@@ -442,6 +443,8 @@ module Familia
       #   warn "TTL drift detected: #{drifted.keys}" if drifted.any?
       #
       def ttl_report
+        Familia.assert_replies_available!("#{self.class}#ttl_report")
+
         # Collect all keys upfront: main key first, then relation keys
         main_key = dbkey
         relation_names = []
@@ -477,6 +480,29 @@ module Familia
         end
 
         report
+      end
+
+      private
+
+      # Raises unless +expiration+ is a non-negative number.
+      #
+      # It's important to raise exceptions here and not just log warnings. We
+      # don't want to silently fail at setting expirations and cause data
+      # retention issues (e.g. not removed in a timely fashion).
+      #
+      # @param expiration [Object] the TTL in seconds to check
+      # @return [void]
+      # @raise [Familia::Problem] if +expiration+ is not a non-negative number
+      def validate_expiration!(expiration)
+        unless expiration.is_a?(Numeric)
+          raise Familia::Problem,
+                "Default expiration must be a number (#{expiration.class} given for #{self.class})"
+        end
+
+        return if expiration >= 0
+
+        raise Familia::Problem,
+              "Default expiration must be non-negative (#{expiration} given for #{self.class})"
       end
     end
   end

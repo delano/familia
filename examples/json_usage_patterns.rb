@@ -19,8 +19,9 @@ class User < Familia::Horreum
   set :permissions
 end
 
-# Configure encryption (required for encrypted_fields)
-Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+# Configure encryption (required for encrypted_fields). Keys are strict
+# Base64 of 32 bytes; pack('m0') encodes that without the base64 gem.
+Familia.config.encryption_keys = { v1: ['a' * 32].pack('m0') }
 Familia.config.current_key_version = :v1
 
 # Create and save a user

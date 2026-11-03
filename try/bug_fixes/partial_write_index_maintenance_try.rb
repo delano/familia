@@ -358,6 +358,21 @@ end
 [@err.class, PartialIdxBucket.status_index_for('txn-bucket').members]
 #=> [Familia::IndexedFieldFastWriteError, []]
 
+## the in-block refusal tells the caller to write outside the block
+# multi_field_update and save raise OperationModeError inside the block, so
+# the message does not offer them as an in-block remedy.
+[@err.inside_block, @err.message.include?('before or after the block'),
+ @err.message.include?('Use multi_field_update')]
+#=> [true, true, false]
+
+## the multi_field_fast_write refusal outside a block still points to multi_field_update
+begin
+  @c1.multi_field_fast_write(status: 'refused')
+rescue Familia::IndexedFieldFastWriteError => e
+  [e.inside_block, e.message.include?('Use multi_field_update')]
+end
+#=> [false, true]
+
 # =============================================
 # 6. Partial writers refuse inside MULTI/pipeline
 # =============================================
@@ -414,9 +429,9 @@ end
 @err.class
 #=> Familia::OperationModeError
 
-## scoping: a partial write of only non-indexed fields does not trip the
-## refusal -- no index work would happen, so the pre-existing reentrant
-## behavior (broken in its own way, out of scope here) is unchanged
+## a partial write of only non-indexed fields refuses too: inside the
+## caller's MULTI it cannot read its own EXEC result to clear dirty state
+## (previously it queued the write and then raised NoMethodError)
 @err = nil
 begin
   @u1.transaction { @u1.save_fields(:nickname) }
@@ -424,7 +439,7 @@ rescue StandardError => e
   @err = e
 end
 @err.is_a?(Familia::OperationModeError)
-#=> false
+#=> true
 
 # =============================================
 # 7. RecordExistsError#message never raises

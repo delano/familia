@@ -127,7 +127,11 @@ module Familia
         # @return [Hash] stats hash (see above)
         # @raise [ArgumentError] if the class has no chores, the named chore
         #   is not registered, or `instances`/`load_multi` are unavailable
+        # @raise [Familia::OperationModeError] inside a transaction or
+        #   pipeline, where the instances cannot be read and loaded
         def run_chores!(chore_name: nil, limit: nil, batch_size: DEFAULT_BATCH_SIZE)
+          Familia.assert_replies_available!("#{name}.run_chores!")
+
           unless respond_to?(:instances) && respond_to?(:load_multi)
             raise ArgumentError, "#{name} cannot run_chores! without instances and load_multi"
           end

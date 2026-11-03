@@ -318,7 +318,7 @@ win — add `record_class:` yourself if you want `each_record` on it.
 
 Note: `pipeline: 0` raises `ArgumentError`. Use `pipeline: nil` to disable pipelining.
 
-The read-only case and the serial-write case collapse into the same mode because both require **immediate** execution with real return values. Wrapping `save` in an outer `pipelined` would either return `Redis::Future` objects or raise `ConflictingContextError` when `save`'s internal transaction tries to open.
+The read-only case and the serial-write case collapse into the same mode because both require **immediate** execution with real return values. Inside an outer `pipelined`, commands return `Redis::Future` objects instead of replies, and `save`, `commit_fields` and the other partial writers raise `Familia::OperationModeError` before queueing anything (see [Transaction Safety](../reference/transaction_safety.md), rules 1 and 4).
 
 ### The three idiomatic patterns
 

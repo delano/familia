@@ -5,6 +5,7 @@
 
 $LOAD_PATH.unshift(File.expand_path('lib', __dir__))
 ENV['TEST'] = 'true'
+require 'base64'
 require 'familia'
 
 puts "Understanding the issue with cross-context decryption..."

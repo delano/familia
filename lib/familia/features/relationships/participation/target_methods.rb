@@ -135,15 +135,15 @@ module Familia
             method_name = "add_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |item, score = nil, through_attrs: {}|
+              # Resolve through class if specified. It refuses inside a
+              # transaction or pipeline before anything is queued.
+              through_class = Participation::ThroughModelOperations.resolve_through_class(through, self, __method__)
               collection = send(collection_name)
 
               # Calculate score if needed and not provided
               if type == :sorted_set && score.nil? && item.respond_to?(:calculate_participation_score)
                 score = item.calculate_participation_score(self.class, collection_name)
               end
-
-              # Resolve through class if specified
-              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection add and reverse index tracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -192,10 +192,10 @@ module Familia
             method_name = "remove_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |item|
+              # Resolve through class if specified. It refuses inside a
+              # transaction or pipeline before anything is queued.
+              through_class = Participation::ThroughModelOperations.resolve_through_class(through, self, __method__)
               collection = send(collection_name)
-
-              # Resolve through class if specified
-              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection remove and reverse index untracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -275,6 +275,7 @@ collection_name: collection_name)
             method_name = "#{collection_name}_with_permission"
 
             target_class.define_method(method_name) do |min_permission = :read, limit: nil, offset: 0, batch_size: 500|
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               TargetMethods::Builder.validate_min_permission!(min_permission)
               TargetMethods::Builder.validate_permission_query_args!(
                 limit: limit, offset: offset, batch_size: batch_size,
@@ -399,6 +400,8 @@ collection_name: collection_name)
                 return to_enum(:"each_#{collection_name}_with_permission", min_permission, batch_size: batch_size)
               end
 
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
+
               collection = send(collection_name)
               cursor = 0
               loop do
@@ -434,6 +437,10 @@ collection_name: collection_name)
             method_name = "stage_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |through_attrs: {}|
+              # Staging saves the through model, which cannot run inside a
+              # transaction or pipeline.
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
+
               through_class = Familia.resolve_class(through)
               staging_collection = send(staged_name)
 
@@ -469,6 +476,11 @@ collection_name: collection_name)
             method_name = "activate_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |staged_model, participant, through_attrs: {}|
+              # Activation reads the staged model before it writes. Refuse
+              # before the collection writes below are queued, so a caller
+              # that rescues the error inside its block commits nothing.
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
+
               through_class = Familia.resolve_class(through)
               active_collection = send(collection_name)
               staging_collection = send(staged_name)
@@ -481,6 +493,7 @@ collection_name: collection_name)
               end
 
               # Transaction: sorted set operations (ZADD active + SADD participations + ZREM staging)
+              removed = nil
               transaction do |_tx|
                 # Add to active collection
                 TargetMethods::Builder.add_to_collection(
@@ -497,10 +510,15 @@ collection_name: collection_name)
                   participant.track_participation_in(active_collection.dbkey)
                 end
 
-                # Remove from staging set and log warning if entry not found
+                # Remove from staging set
                 removed = staging_collection.remove(staged_model.objid)
-                Familia.debug "[activate] Staging entry not found for #{staged_model.objid}" if removed == 0
               end
+
+              # The ZREM reply is a Redis::Future until the transaction above
+              # completes, so the missing-entry check reads it afterwards. A
+              # single-member ZREM replies true or false.
+              removed = removed.value if removed.is_a?(Redis::Future)
+              Familia.debug "[activate] Staging entry not found for #{staged_model.objid}" unless removed
 
               # TRANSACTION BOUNDARY: Through model operations happen outside transaction
               # (same pattern as build_add_item - see that method for detailed rationale)
@@ -529,6 +547,11 @@ collection_name: collection_name)
             method_name = "unstage_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |staged_model|
+              # Unstaging checks that the staged model exists before it
+              # destroys it and reports the outcome. Refuse before the ZREM
+              # below is queued.
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
+
               staging_collection = send(staged_name)
 
               # Remove from staging set
@@ -557,6 +580,7 @@ collection_name: collection_name)
             method_name = "stage_#{collection_name}"
 
             target_class.define_method(method_name) do |through_attrs_list|
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               return [] if through_attrs_list.empty?
 
               through_class = Familia.resolve_class(through)
@@ -599,6 +623,7 @@ collection_name: collection_name)
             method_name = "unstage_#{collection_name}"
 
             target_class.define_method(method_name) do |staged_models_or_objids|
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               return 0 if staged_models_or_objids.empty?
 
               through_class = Familia.resolve_class(through)

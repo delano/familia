@@ -85,6 +85,7 @@ module Familia
       # @note Connection Handler Compatibility:
       #   - FiberTransactionHandler: Supports reentrant transactions
       #   - ProviderConnectionHandler: Full transaction support
+      #   - ScopedConnectionHandler: Full transaction support, on the scope's connection
       #   - CreateConnectionHandler: Full transaction support
       #   - FiberConnectionHandler: Blocked (raises OperationModeError)
       #   - DefaultConnectionHandler: Blocked (raises OperationModeError)
@@ -163,7 +164,8 @@ module Familia
       #
       # @raise [ArgumentError] If no instances are given, or +pre_check+ is
       #   provided without +watch_keys+.
-      # @raise [Familia::OperationModeError] If called within an existing transaction.
+      # @raise [Familia::OperationModeError] If called within an existing
+      #   transaction or pipeline.
       # @raise [Familia::CrossDatabaseError] If the roots (or their related
       #   fields) span multiple logical databases.
       # @raise [Familia::OptimisticLockError] If +watch_keys+ retries are exhausted.
@@ -204,9 +206,12 @@ module Familia
       def atomic_write(*instances, update_expiration: true, watch_keys: nil, pre_check: nil, &user_block)
         raise ArgumentError, 'atomic_write requires at least one instance' if instances.empty?
         raise ArgumentError, 'pre_check requires watch_keys' if pre_check && !watch_keys&.any?
-        if Fiber[:familia_transaction]
+        # Mirrors Horreum#atomic_write. A pipeline is refused too:
+        # prepare_for_save and pre_check read replies, which are Futures there.
+        if Familia.transaction_or_pipeline?
           raise Familia::OperationModeError,
-                'Cannot call Familia.atomic_write within a transaction. It opens its own MULTI/EXEC and cannot be nested.'
+                'Cannot call Familia.atomic_write within a transaction or pipeline. ' \
+                'It opens its own MULTI/EXEC and cannot be nested.'
         end
 
         guard_cross_model_database!(instances)        # all roots + their related fields share ONE logical db
@@ -367,6 +372,7 @@ module Familia
       # @note Connection Handler Compatibility:
       #   - FiberPipelineHandler: Supports reentrant pipelines
       #   - ProviderConnectionHandler: Full pipeline support
+      #   - ScopedConnectionHandler: Full pipeline support, on the scope's connection
       #   - CreateConnectionHandler: Full pipeline support
       #   - FiberTransactionHandler: Blocked (raises OperationModeError)
       #   - FiberConnectionHandler: Blocked (raises OperationModeError)
@@ -396,6 +402,10 @@ module Familia
       #   commands in the block may run on different connections. When several
       #   commands must share one connection -- WATCH, MULTI, SUBSCRIBE --
       #   use {#transaction}, {#pipelined}, or check out from your own pool.
+      #   Without a provider, the yielded client is a fresh connection that
+      #   this method does not close; wrap the work in
+      #   {Familia::Connection#with_connection_scope} to hold one connection
+      #   for the block and close it afterwards.
       #
       # @yield [Redis] A Database connection
       # @return The result of the block

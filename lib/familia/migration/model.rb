@@ -92,12 +92,29 @@ module Familia
       attr_reader :error_count
 
       # Interactive debugging mode flag
+      #
+      # When true, #migrate loads pry-byebug before it scans, and each record
+      # that raises opens a pry session in #handle_record_error. familia does
+      # not depend on pry-byebug, so the application's bundle must include
+      # it; otherwise #migrate raises Errors::PreconditionFailed.
+      #
       # @return [Boolean] whether to drop into pry on errors
       attr_reader :interactive
 
-      # Redis SCAN pattern for finding records
+      # Redis SCAN pattern for finding records. Defaults to the model
+      # class's scan_pattern, which escapes the class prefix, delimiter
+      # and suffix.
       # @return [String] pattern like "customer:*:object"
       attr_reader :scan_pattern
+
+      # Redis SCAN TYPE option, or nil to scan keys of every type. When
+      # #prepare leaves @scan_pattern unset, it defaults to
+      # Familia::Horreum::OBJECT_KEY_TYPE, so the default pattern yields
+      # only object hashes and not a multi_index bucket set whose name
+      # ends with the class suffix. With a custom @scan_pattern it stays
+      # nil unless #prepare sets it.
+      # @return [String, nil] a Redis type such as "hash"
+      attr_reader :scan_type
 
       def initialize(options = {})
         super
@@ -111,13 +128,24 @@ module Familia
       # executes the SCAN-based record processing, and displays
       # a comprehensive summary.
       #
-      # @return [Boolean] true if no errors occurred
+      # An error raised while processing one record is logged and counted,
+      # and the scan continues. The errors listed below end the run instead.
+      #
+      # @return [Boolean] true if no record raised an error
+      # @raise [Errors::PreconditionFailed] if the model class is not set or
+      #   is not a Familia::Horreum subclass, or if {#interactive} is set and
+      #   pry-byebug cannot be loaded
+      # @raise [Familia::SchemaValidatorLoadError] if a record is validated,
+      #   by a validation hook or a {#validate_schema} call in
+      #   {#process_record}, and json_schemer is installed but fails to load.
+      #   The run ends at the first record validated, in a dry run as well
+      #   as an actual run. {Pipeline} differs: see its class documentation.
       def migrate
         validate_model_class!
 
         # Set `@interactive = true` in the implementing migration class
         # for an interactive debug session on a per-record basis.
-        require 'pry-byebug' if interactive
+        require_interactive_debugger if interactive
 
         print_database_details
         run_mode_banner
@@ -250,9 +278,16 @@ module Familia
       # is enabled. Validates the object before and/or after the transform
       # based on {#validate_before_transform?} and {#validate_after_transform?}.
       #
+      # A Familia::SchemaValidatorLoadError raised here ends the run instead
+      # of counting as an error on the record. With only
+      # {#validate_after_transform?} enabled, the record it is raised for has
+      # already been transformed.
+      #
       # @param obj [Familia::Horreum] the object to process
       # @param key [String] the database key of the record
       # @return [void]
+      # @raise [Familia::SchemaValidatorLoadError] if json_schemer is
+      #   installed but fails to load
       def process_record_with_validation(obj, key)
         if validate_before_transform?
           result = validate_schema(obj, context: 'before transform')
@@ -280,8 +315,29 @@ module Familia
         @batch_size   = Familia::Migration.config.batch_size
         @model_class  = nil
         @scan_pattern = nil
+        @scan_type    = nil
         @interactive  = false
         @total_records = 0
+      end
+
+      # pry-byebug is an optional development tool that familia does not
+      # declare. Raising PreconditionFailed, a StandardError, lets Runner
+      # record the migration as failed; a bare LoadError would escape it.
+      # Only a LoadError for pry-byebug itself means the bundle lacks it. A
+      # LoadError for another path means pry-byebug is installed but one of
+      # its own requires failed, and adding it to the Gemfile would not help.
+      def require_interactive_debugger
+        require 'pry-byebug'
+      rescue LoadError => e
+        unless e.path == 'pry-byebug'
+          raise Errors::PreconditionFailed,
+                "pry-byebug is installed but failed to load, so interactive mode cannot start: #{e.message}. " \
+                "Fix the application's bundle, or turn off interactive mode"
+        end
+
+        raise Errors::PreconditionFailed,
+              'Interactive mode needs the pry-byebug gem, which familia does not depend on. ' \
+              "Add pry-byebug to the application's Gemfile, or turn off interactive mode (#{e.message})"
       end
 
       def validate_model_class!
@@ -295,8 +351,18 @@ module Familia
 
         @total_records  = @model_class.respond_to?(:instances) ? @model_class.instances.size : 0
         @dbclient     ||= @model_class.respond_to?(:dbclient) ? @model_class.dbclient : Familia.dbclient
-        @scan_pattern ||= "#{@model_class.prefix}:*:object"
+        unless @scan_pattern
+          @scan_pattern = @model_class.scan_pattern
+          @scan_type ||= Familia::Horreum::OBJECT_KEY_TYPE
+        end
         nil
+      end
+
+      # Options for each SCAN call over the records.
+      def scan_options
+        options = { match: @scan_pattern, count: @batch_size }
+        options[:type] = @scan_type if @scan_type
+        options
       end
 
       def familia_horreum_class?
@@ -310,7 +376,7 @@ module Familia
         cursor = '0'
 
         loop do
-          cursor, keys    = dbclient.scan(cursor, match: @scan_pattern, count: @batch_size)
+          cursor, keys    = dbclient.scan(cursor, **scan_options)
           @total_scanned += keys.size
 
           show_progress if should_show_progress?
@@ -343,6 +409,12 @@ module Familia
         else
           process_record(obj, key)
         end
+      rescue Familia::SchemaValidatorLoadError
+        # A validator that cannot load is not a fault of this record, and
+        # every record would fail the same way. Counting it once per record
+        # would let #migrate finish and Runner record the migration as
+        # applied, so it ends the run and Runner records it as failed.
+        raise
       rescue StandardError => ex
         handle_record_error(key, ex)
       end

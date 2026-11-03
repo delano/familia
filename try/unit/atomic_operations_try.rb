@@ -488,6 +488,42 @@ rescue Familia::OperationModeError => e
 end
 #=> [true, 0, []]
 
+## atomic_swap and sweep_orphaned_temp_keys refuse a pipeline connection
+@refusals = []
+Familia.dbclient.pipelined do |pipe|
+  [
+    -> { Familia::AtomicOperations.atomic_swap('ao_conn:tmp', 'ao_conn:final', pipe) },
+    -> { Familia::AtomicOperations.sweep_orphaned_temp_keys(pipe) },
+  ].each do |call|
+    call.call
+    @refusals << :no_error
+  rescue Familia::OperationModeError => e
+    @refusals << e.message[/\A(\S+) cannot run inside/, 1]
+  end
+end
+@refusals
+#=> ["AtomicOperations.atomic_swap", "AtomicOperations.sweep_orphaned_temp_keys"]
+
+## sweep_orphaned_temp_keys(Familia.dbclient) inside a Familia transaction raises OperationModeError
+begin
+  Familia.transaction { Familia::AtomicOperations.sweep_orphaned_temp_keys(Familia.dbclient) }
+  :no_error
+rescue Familia::OperationModeError
+  :refused
+end
+#=> :refused
+
+## with_rebuild refuses a raw MULTI connection and leaves no lock behind
+ao_reset('ao_raw:final')
+@err = nil
+Familia.dbclient.multi do |tx|
+  Familia::AtomicOperations.with_rebuild('ao_raw:final', tx) { |_t, _touch| :never }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.class, Familia.dbclient.exists(Familia::AtomicOperations.rebuild_lock_key('ao_raw:final'))]
+#=> [Familia::OperationModeError, 0]
+
 ## with_rebuild fails closed when the temp key vanishes after the presence guard
 # The block wrote a batch, assert_temp_key_present! passed, then the key is
 # gone by the time the swap script runs. Without populated: carried into the

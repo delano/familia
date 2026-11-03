@@ -404,8 +404,9 @@ end
 ## Testing
 
 ```ruby
-# Test helper setup
-Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+# Test helper setup. Keys are strict Base64 of 32 bytes; pack('m0') is core
+# Ruby's strict Base64 encoding, so no base64 gem is needed.
+Familia.config.encryption_keys = { v1: ['a' * 32].pack('m0') }
 Familia.config.current_key_version = :v1
 
 # In tests

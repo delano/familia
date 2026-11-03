@@ -349,9 +349,9 @@ module Familia
     #
     def guard_indexed_fast_write!(index_rels)
       return if index_rels.empty?
-      return unless Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      return unless Familia.transaction_or_pipeline?
 
-      raise Familia::IndexedFieldFastWriteError.new(@name, index_rels.first.index_name)
+      raise Familia::IndexedFieldFastWriteError.new(@name, index_rels.first.index_name, inside_block: true)
     end
 
     # Applies the in-memory setter, then maintains the class-level index

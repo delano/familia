@@ -42,6 +42,8 @@ module Familia
     # - Returns true/valid if no schema is defined for the class
     # - Uses json_schemer gem for validation when available
     # - Falls back to null validation (always passes) if gem not installed
+    # - Raises SchemaValidatorLoadError if json_schemer is installed but
+    #   fails to load
     #
     # Integration Patterns:
     #
@@ -112,6 +114,8 @@ module Familia
 
       # Check if the current state validates against the schema
       # @return [Boolean] true if valid or no schema defined
+      # @raise [SchemaValidatorLoadError] if json_schemer is installed but
+      #   fails to load
       def valid_against_schema?
         return true unless self.class.schema_defined?
 
@@ -120,6 +124,8 @@ module Familia
 
       # Get validation errors for the current state
       # @return [Array<Hash>] array of error objects (empty if valid)
+      # @raise [SchemaValidatorLoadError] if json_schemer is installed but
+      #   fails to load
       def schema_validation_errors
         return [] unless self.class.schema_defined?
 
@@ -129,6 +135,8 @@ module Familia
       # Validate current state or raise SchemaValidationError
       # @return [true] if valid
       # @raise [SchemaValidationError] if validation fails
+      # @raise [SchemaValidatorLoadError] if json_schemer is installed but
+      #   fails to load
       def validate_against_schema!
         return true unless self.class.schema_defined?
 

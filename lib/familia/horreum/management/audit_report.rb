@@ -15,7 +15,8 @@ module Familia
       :audited_at,         # Float - timestamp when audit started
       :instances,          # Hash {phantoms: [], missing: [], count_timeline: N, count_scan: N}
       :unique_indexes,     # Array<Hash> [{index_name:, stale: [], missing: []}]
-      :multi_indexes,      # Array<Hash> [{index_name:, stale_members: [], orphaned_keys: [], missing: []}]
+      # Array<Hash> [{index_name:, stale_members: [], orphaned_keys: [], missing: [], foreign_owned_keys: []}]
+      :multi_indexes,
       :participations,     # Array<Hash> [{collection_name:, stale_members: []}]
       # nil = not checked; [] = no fields; [{field_name:, klass:, orphaned_keys:, count:, status:}]
       :related_fields,
@@ -27,6 +28,10 @@ module Familia
       #
       # Multi-indexes with status :not_implemented are skipped — they cannot
       # be assessed, so they neither pass nor fail the health check.
+      # A multi-index entry in +foreign_owned_keys+ counts against health
+      # only without an +owner_key+: a key whose owner the audit did not
+      # check. A key with an owner is that record's data, which neither the
+      # rebuild nor a repair changes.
       # A nil related_fields or cross_references means the dimension was
       # not checked and does not affect health.
       def healthy?
@@ -36,7 +41,8 @@ module Familia
           multi_indexes.all? { |idx|
             next true if idx[:status] == :not_implemented
 
-            idx[:stale_members].empty? && idx[:orphaned_keys].empty? && idx[:missing].empty?
+            idx[:stale_members].empty? && idx[:orphaned_keys].empty? && idx[:missing].empty? &&
+              unchecked_foreign_keys(idx).empty?
           } &&
           participations.all? { |p| p[:stale_members].empty? } &&
           related_fields_healthy? &&
@@ -74,6 +80,7 @@ module Familia
           },
           multi_indexes: multi_indexes.map { |idx|
             entry = { index_name: idx[:index_name], stale_members: idx[:stale_members].size, orphaned_keys: idx[:orphaned_keys].size, missing: idx[:missing].size }
+            entry[:foreign_owned_keys] = idx[:foreign_owned_keys].size if idx.key?(:foreign_owned_keys)
             entry[:status] = idx[:status] if idx[:status]
             entry
           },
@@ -103,8 +110,10 @@ module Familia
           if idx[:status] == :not_implemented
             lines << "  multi_index :#{idx[:index_name]}: not_implemented"
           else
-            lines << "  multi_index :#{idx[:index_name]}: stale_members=#{idx[:stale_members].size}" \
-                     " orphaned_keys=#{idx[:orphaned_keys].size} missing=#{idx[:missing].size}"
+            line = "  multi_index :#{idx[:index_name]}: stale_members=#{idx[:stale_members].size}" \
+                   " orphaned_keys=#{idx[:orphaned_keys].size} missing=#{idx[:missing].size}"
+            line += " foreign_owned_keys=#{idx[:foreign_owned_keys].size}" if idx.key?(:foreign_owned_keys)
+            lines << line
           end
         end
 
@@ -119,6 +128,15 @@ module Familia
       end
 
       private
+
+      # Entries of a multi-index result's +foreign_owned_keys+ without an
+      # +owner_key+. A result built without that list has none.
+      #
+      # @param idx [Hash] one multi-index audit result
+      # @return [Array<Hash>]
+      def unchecked_foreign_keys(idx)
+        Array(idx[:foreign_owned_keys]).select { |entry| entry[:owner_key].nil? }
+      end
 
       # A nil related_fields means the dimension was not checked, which
       # does not count against health. Otherwise every field must have
