@@ -327,7 +327,8 @@ module Familia
       return unless trace_enabled? && Familia.debug?
 
       ident_str = ident.nil? ? '<nil>' : ident.to_s
-      logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
+      logger.trace format('[%s] %s -> %s <-%s', label, Familia.loggable_text(instance_id),
+                          Familia.loggable_text(ident_str), Familia.loggable_text(extra_context))
     end
 
     # Reset the cached trace_enabled? value.
@@ -352,7 +353,10 @@ module Familia
     # Format a log message with optional structured context.
     #
     # Combines a message string with key-value context into a single
-    # log line. Empty context returns the message unchanged.
+    # log line. Empty context returns the message unchanged. Otherwise the
+    # message and each value pass through Familia.loggable_text, so a BINARY
+    # key in one does not raise Encoding::CompatibilityError against
+    # non-ASCII UTF-8 text in another.
     #
     # @param message [String, nil] The message to log
     # @param context [Hash] Structured context (key-value pairs)
@@ -365,8 +369,8 @@ module Familia
     #
     def format_log(message, context)
       return message if context.empty?
-      parts = [message]
-      parts << context.map { |k, v| "#{k}=#{v}" }.join(' ')
+      parts = [message && Familia.loggable_text(message)]
+      parts << context.map { |k, v| "#{k}=#{Familia.loggable_text(v)}" }.join(' ')
       parts.compact.join(' ')
     end
 

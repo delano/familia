@@ -250,9 +250,9 @@ module Familia
         # logged at ERROR (ungated) and also wrapped in the StandardError sent
         # to notify_error, so anything placed in it reaches every sink.
         msg = if corrupted
-          "Corrupted JSON in #{context} (#{dbkey_info})"
+          "Corrupted JSON in #{context} (#{Familia.loggable_text(dbkey_info)})"
         else
-          "Legacy plain string in #{context} (#{dbkey_info})"
+          "Legacy plain string in #{context} (#{Familia.loggable_text(dbkey_info)})"
         end
 
         # Structured error logging with instrumentation. The length is always

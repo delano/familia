@@ -757,7 +757,10 @@ module Familia
 
                 memberships << membership
               rescue StandardError => e
-                Familia.debug "[#{collection_key}] Error checking membership: #{e.message}"
+                if Familia.debug?
+                  Familia.debug "[#{Familia.loggable_text(collection_key)}] Error checking membership: " \
+                                "#{Familia.loggable_text(e.message)}"
+                end
                 next
               end
             end

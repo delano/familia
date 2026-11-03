@@ -158,6 +158,30 @@ module Familia
       text.valid_encoding? ? text : text.b
     end
 
+    # Returns +value+ as text that a log line or error message can put next
+    # to any other UTF-8 text: +value.to_s+ itself when it is ASCII-only or
+    # valid UTF-8, otherwise a UTF-8 copy of its bytes with each byte that is
+    # not valid UTF-8 written as \xNN.
+    #
+    # A key {#join} builds from an identifier that is not valid UTF-8 is
+    # BINARY, as is a key or member redis-client reads with such bytes.
+    # Interpolating one into a message that also holds non-ASCII UTF-8 text,
+    # such as a member, a field value or an exception message, raises
+    # Encoding::CompatibilityError. Messages pass keys, and any value they
+    # hold as is, through here.
+    #
+    # @param value [#to_s] key, identifier or other value to show
+    # @return [String] ASCII-only or valid UTF-8 text
+    # @api private
+    def loggable_text(value)
+      text = value.to_s
+      return text if text.ascii_only? || (text.encoding == Encoding::UTF_8 && text.valid_encoding?)
+
+      text.dup.force_encoding(Encoding::UTF_8).scrub do |bytes|
+        bytes.each_byte.map { |byte| format('\\x%02X', byte) }.join
+      end
+    end
+
     # Joins array elements with Familia delimiter
     #
     # The result has the encoding {#normalize_key_encoding} gives it: UTF-8

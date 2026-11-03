@@ -440,7 +440,7 @@ module Familia
         Familia.assert_replies_available!("#{self.class}#commit_fields")
 
         prepared_value = to_h_for_storage
-        Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
+        log_commit_fields_begin(prepared_value, update_expiration)
 
         # Guard and claim class-level unique indexes before the MULTI opens
         # (fail-closed: a constraint violation leaves the hash untouched).
@@ -509,6 +509,20 @@ module Familia
         true
       end
       private :persisted_successfully?
+
+      # Logs the start of #commit_fields when debug is on. The message is
+      # not built otherwise, and it shows the key through
+      # Familia.loggable_text: a BINARY key next to a non-ASCII field value
+      # would raise Encoding::CompatibilityError.
+      #
+      # @return [void]
+      def log_commit_fields_begin(prepared_value, update_expiration)
+        return unless Familia.debug?
+
+        Familia.debug "[commit_fields] Begin #{self.class} #{Familia.loggable_text(dbkey)} #{prepared_value} " \
+                      "(exp: #{update_expiration})"
+      end
+      private :log_commit_fields_begin
 
       # Snapshot of in-memory state for the fields multi_field_update is about
       # to mutate: ivar value plus whether the field was already dirty. Only
@@ -1073,7 +1087,9 @@ module Familia
           # leaves no gap for the key to expire or be deleted before the read.
           raise Familia::KeyNotFoundError, read_key if fields.empty?
 
-          Familia.debug "[refresh!] #{self.class} #{read_key} fields:#{fields.keys}"
+          if Familia.debug?
+            Familia.debug "[refresh!] #{self.class} #{Familia.loggable_text(read_key)} fields:#{fields.keys}"
+          end
 
           # Deserialize before the reset below, and name the key that was
           # read in the log entry for a value that is not JSON.
