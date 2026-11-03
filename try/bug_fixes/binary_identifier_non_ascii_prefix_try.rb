@@ -63,6 +63,13 @@ joined = Familia.join('user', 'élodie'.b, 'object')
 [joined == 'user:élodie:object', joined.encoding]
 #=> [true, Encoding::UTF_8]
 
+## Familia.join relabels a new String and leaves its parts as they were
+part = 'élodie'.b.freeze
+invalid = "bad\xFF"
+joined = [Familia.join(part), Familia.join(:user, invalid, :object)]
+[joined.map(&:encoding), joined.first.equal?(part), part.encoding, part.frozen?, invalid.encoding]
+#=> [[Encoding::UTF_8, Encoding::BINARY], false, Encoding::BINARY, true, Encoding::UTF_8]
+
 ## Familia.normalize_key_encoding relabels the bytes and leaves them unchanged
 relabeled = [Familia.normalize_key_encoding('équipe'.b), Familia.normalize_key_encoding("bad\xFF")]
 [relabeled.map(&:encoding), relabeled.map(&:b)]

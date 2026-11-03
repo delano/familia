@@ -220,7 +220,10 @@ module Familia
       rescue Encoding::CompatibilityError
         parts.flatten.map { |part| part.to_s.b }.join(Familia.delim.to_s.b)
       end
-      normalize_key_encoding(key)
+      # Array#join returns a new String that nothing else holds, so it is
+      # relabelled in place, as normalize_key_encoding would label a copy.
+      key.force_encoding(Encoding::UTF_8) unless key.encoding == Encoding::UTF_8
+      key.valid_encoding? ? key : key.force_encoding(Encoding::BINARY)
     end
 
     # Splits a string using Familia delimiter
