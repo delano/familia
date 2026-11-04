@@ -46,17 +46,13 @@ Changed
   ISO-8859-1 ``"caf\xE9"``, holds the collection key's bytes. 2.13 and 2.14
   stored the key transcoded to UTF-8, which is not the collection's key.
   ``remove_from_<target>_<collection>`` does not remove an entry written by
-  2.13 or 2.14, and adding the membership again leaves both. When such an
-  identifier's bytes are not valid UTF-8, ``current_participations``, and so
-  ``relationship_status``, raise ``ArgumentError`` for any participant
-  holding such an entry, so its other memberships are not returned either;
-  2.14 returned them. ``participating_ids_for_target`` raises for that
-  target class, and ``participating_in_target?`` given collection names
-  raises when it reaches the entry before a match. They already did so for
-  a BINARY target identifier that is not valid UTF-8. When the bytes are
-  valid UTF-8, ``participating_ids_for_target`` returns them as a UTF-8
-  identifier, which finds the target; 2.14 returned one that found no
-  record. PR #453
+  2.13 or 2.14, and adding the membership again leaves both.
+  ``participating_ids_for_target`` returns the identifier's bytes, as UTF-8
+  when they are valid UTF-8 and as BINARY otherwise (``"caf\xE9".b``),
+  which finds the target; 2.14 returned one that found no record.
+  ``current_participations`` and ``relationship_status`` leave the
+  membership out and return the participant's other memberships, as 2.14
+  did. PR #453
 
 Fixed
 -----
@@ -82,6 +78,16 @@ Fixed
   holds non-ASCII characters no longer raise ``Encoding::CompatibilityError``
   when an identifier that is not valid UTF-8 is a member of a participation
   collection. PR #453
+- ``current_participations``, ``relationship_status``,
+  ``participating_ids_for_target``, ``participating_in_target?`` given
+  collection names, and the generated ``<target>_ids``,
+  ``<target>_instances`` and ``<target>_count`` no longer raise
+  ``ArgumentError`` (invalid byte sequence in UTF-8) for a participant
+  whose ``participations`` set holds an entry for a target identifier that
+  is not valid UTF-8, given as BINARY (``"bin\xFE".b``) or as UTF-8. They
+  read each entry by its bytes. ``current_participations`` returns the
+  participant's other memberships and that membership, with ``target_id``
+  the identifier's bytes as BINARY. PR #453
 - ``audit_multi_indexes``, ``repair_multi_indexes!`` and ``health_check`` of
   a class with an instance-scoped ``multi_index`` and ``participates_in`` of
   the scope class no longer raise ``Encoding::CompatibilityError`` when a

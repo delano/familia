@@ -632,14 +632,16 @@ module Familia
           def participating_ids_for_target(target_class, collection_names = nil)
             Familia.assert_replies_available!("#{self.class}#participating_ids_for_target")
 
-            # Use centralized key_prefix method for consistent key generation
-            target_prefix = target_class.key_prefix
+            # Use centralized key_prefix method for consistent key generation.
+            # Entries are compared and split by their bytes; see
+            # #split_participation_entry.
+            target_prefix = target_class.key_prefix.b
             ids = Set.new
 
             participations.members.each do |key|
-              next unless key.start_with?(target_prefix)
+              next unless key.b.start_with?(target_prefix)
 
-              parts = key.split(Familia.delim, 3)  # Split into ["targetclass", "id", "collection"]
+              parts = split_participation_entry(key) # ["targetclass", "id", "collection"]
               id = parts[1]
 
               # If filtering by collection names, check before adding
@@ -668,15 +670,17 @@ module Familia
           def participating_in_target?(target_class, collection_names = nil)
             Familia.assert_replies_available!("#{self.class}#participating_in_target?")
 
-            # Use centralized key_prefix method for consistent key generation
-            target_prefix = target_class.key_prefix
+            # Use centralized key_prefix method for consistent key generation.
+            # Entries are compared and split by their bytes; see
+            # #split_participation_entry.
+            target_prefix = target_class.key_prefix.b
 
             participations.members.any? do |key|
-              next false unless key.start_with?(target_prefix)
+              next false unless key.b.start_with?(target_prefix)
 
               # If filtering by specific collections, check the collection name
               if collection_names && !collection_names.empty?
-                collection = key.split(Familia.delim, 3)[2]
+                collection = split_participation_entry(key)[2]
                 collection_names.include?(collection)
               else
                 true
@@ -699,7 +703,7 @@ module Familia
             collection_keys.each do |collection_key|
               # Parse the collection key to extract target info
               # Expected format: "targetclass:targetid:collectionname"
-              target_class_config, target_id, collection_name_from_key = collection_key.split(Familia.delim, 3)
+              target_class_config, target_id, collection_name_from_key = split_participation_entry(collection_key)
               next unless target_class_config && target_id && collection_name_from_key
 
               # Find the matching participation configuration
@@ -769,6 +773,24 @@ module Familia
           end
 
           private
+
+          # Split a participations entry, "targetclass:targetid:collectionname",
+          # into at most three parts by its bytes.
+          #
+          # An entry for a target whose identifier is not valid UTF-8 is read
+          # back as a UTF-8 String with invalid bytes, and String#split raises
+          # ArgumentError on it. Each part is returned in the encoding
+          # Familia.normalize_key_encoding gives its bytes, so the parts of a
+          # valid UTF-8 entry are UTF-8, as String#split returns them, and a
+          # target identifier that is not valid UTF-8 is BINARY, which
+          # +find_by_id+ turns into the target's key.
+          #
+          # @param entry [String] a member of the +participations+ set
+          # @return [Array<String>] up to three parts
+          # @api private
+          def split_participation_entry(entry)
+            entry.to_s.b.split(Familia.delim.to_s.b, 3).map { |part| Familia.normalize_key_encoding(part) }
+          end
 
           # Convert a raw value to an appropriate participation score.
           #

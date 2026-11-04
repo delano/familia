@@ -112,23 +112,19 @@ entry written by 2.13 or 2.14, and adding the membership again leaves both
 entries. A process still on 2.14 does not remove an entry written by this
 version either. The collection membership itself is removed either way.
 
-When the identifier's bytes are not valid UTF-8, as for `"caf\xE9"`,
-`current_participations`, and so `relationship_status`, now raise
-`ArgumentError` for any participant holding such an entry, so they no
-longer return its other memberships either. `participating_ids_for_target`
-raises for that target class, and `participating_in_target?` given
-collection names raises when it reaches the entry before a match. They
-already did so for a BINARY target identifier that is not valid UTF-8.
-`participating_in_target?` without collection names returns `true`. With
-2.14, `participating_ids_for_target` returned an identifier that found no
-record, and `current_participations` left the membership out and returned
-the participant's other memberships.
+The participation readers parse an entry by its bytes.
+`participating_ids_for_target` returns the identifier's bytes: as the BINARY
+identifier `"caf\xE9".b` when they are not valid UTF-8, as for `"caf\xE9"`,
+and as the UTF-8 identifier `"été"` when they are, as for
+`"\xC3\xA9t\xC3\xA9"` labelled ISO-8859-1. Either finds the target. With
+2.14 it returned the bytes transcoded to UTF-8, `"café"` and `"Ã©tÃ©"`,
+which found no record. `participating_in_target?` matches the entry with or
+without collection names.
 
-When the bytes are valid UTF-8, as for `"\xC3\xA9t\xC3\xA9"` labelled
-ISO-8859-1, none of them raise. `participating_ids_for_target` returns the
-bytes as the UTF-8 identifier `"été"`, which finds the target; 2.14 returned
-an identifier transcoded a second time, which found no record.
-`current_participations` leaves the membership out, as it did with 2.14.
+`current_participations`, and so `relationship_status`, leave the membership
+out and return the participant's other memberships, as they did with 2.14.
+The target loads with its identifier transcoded (see below), and that
+identifier's collection is not the one the participant joined.
 
 **What to do.** Prefer UTF-8 identifiers. A field value is stored as JSON,
 which transcodes it, so a record saved under `"caf\xE9"` (ISO-8859-1) loads
