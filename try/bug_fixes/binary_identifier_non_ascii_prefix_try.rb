@@ -52,6 +52,13 @@ joined = Familia.join('équipe', "bad\xFF".b, 'object')
 Familia.join(['équipe', "bad\xFF".b], :object) == "équipe:bad\xFF:object".b
 #=> true
 
+## the byte fallback keeps the separators of empty and nil-holding nested arrays, as Array#join does
+[
+  Familia.join('équipe', [], "bad\xFF".b).b == Familia.join('équipe', [], "bad\xFF").b,
+  Familia.join('équipe', [nil, "bad\xFF".b], [[]], :object).b == "équipe::bad\xFF::object".b,
+]
+#=> [true, true]
+
 ## Familia.join returns one String value for a key, from the UTF-8 identifier or from the BINARY member
 from_literal = Familia.join('équipe', "bad\xFF", 'object')
 from_member = Familia.join('équipe', "bad\xFF".b, 'object')

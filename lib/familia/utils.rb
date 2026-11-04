@@ -218,7 +218,14 @@ module Familia
       key = begin
         parts.join(Familia.delim)
       rescue Encoding::CompatibilityError
-        parts.flatten.map { |part| part.to_s.b }.join(Familia.delim.to_s.b)
+        # Join as bytes, recursing into nested arrays as Array#join does, so
+        # an empty nested array keeps its separators and the key does not
+        # depend on the parts' encodings.
+        delim = Familia.delim.to_s.b
+        join_bytes = lambda do |list|
+          list.map { |part| part.is_a?(Array) ? join_bytes.call(part) : part.to_s.b }.join(delim)
+        end
+        join_bytes.call(parts)
       end
       # Array#join returns a new String that nothing else holds, so it is
       # relabelled in place, as normalize_key_encoding would label a copy.
