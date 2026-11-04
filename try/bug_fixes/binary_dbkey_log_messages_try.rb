@@ -49,8 +49,15 @@ class ::LogMsgRecord < Familia::Horreum
   hashkey :prefs
 end
 
+class ::LogMsgRel < Familia::Horreum
+  prefix 'logmsg_rel'
+  identifier_field :rid
+  field :rid
+  list :rôles
+end
+
 @cleanup = lambda do
-  [LogMsgTeam, LogMsgMember, LogMsgRecord].each do |klass|
+  [LogMsgTeam, LogMsgMember, LogMsgRecord, LogMsgRel].each do |klass|
     client = klass.dbclient
     keys = client.scan_each(match: "#{klass.prefix}:*").to_a
     client.del(*keys) unless keys.empty?
@@ -159,6 +166,28 @@ ensure
   Familia.debug = @orig_debug
 end
 #=> ['thé', ['élodie']]
+
+## with debug on, destroy! deletes a record with a non-ASCII related field name
+LogMsgRel.new(rid: "bad\xFF").save
+LogMsgRel.find_by_id("bad\xFF").rôles.push('r')
+Familia.debug = true
+begin
+  [LogMsgRel.find_by_id("bad\xFF").destroy!.successful?, LogMsgRel.dbclient.keys('logmsg_rel:bad*')]
+ensure
+  Familia.debug = @orig_debug
+end
+#=> [true, []]
+
+## with debug on, the class-level destroy! deletes it too
+LogMsgRel.new(rid: "bad\xFF").save
+LogMsgRel.find_by_id("bad\xFF").rôles.push('r')
+Familia.debug = true
+begin
+  [LogMsgRel.destroy!("bad\xFF").successful?, LogMsgRel.dbclient.keys('logmsg_rel:bad*')]
+ensure
+  Familia.debug = @orig_debug
+end
+#=> [true, []]
 
 Familia.logger = @orig_logger
 Familia.debug = @orig_debug

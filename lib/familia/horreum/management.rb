@@ -642,7 +642,10 @@ module Familia
 
             fields.each do |name, _definition|
               obj = temp_instance.send(name)
-              Familia.trace :DESTROY_RELATION!, name, "Deleting related field #{name} (#{obj.dbkey})" if Familia.debug?
+              if Familia.debug?
+                Familia.trace :DESTROY_RELATION!, name,
+                              "Deleting related field #{name} (#{Familia.loggable_text(obj.dbkey)})"
+              end
               conn.del(obj.dbkey)
             end
           end

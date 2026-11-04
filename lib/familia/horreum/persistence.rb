@@ -948,7 +948,8 @@ module Familia
             fields.each_key do |name|
               obj = send(name)
               if Familia.debug?
-                Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+                Familia.trace :DELETE_RELATED_FIELD, name,
+                              "Deleting related field #{name} (#{Familia.loggable_text(obj.dbkey)})"
               end
               obj.delete!
             end
