@@ -26,9 +26,15 @@ module Familia
     # @example MyModel.new.update_expiration(expiration: 3600) # => nothing happens
     #
     def update_expiration(expiration: nil)
+      # save and the other writers call this on every write, so the message
+      # is built only with debug on. The key and caller pass through
+      # Familia.loggable_text: a BINARY key next to a non-ASCII class name
+      # or path would raise Encoding::CompatibilityError.
+      return nil unless Familia.debug?
+
       Familia.debug <<~LOG
         [update_expiration] Expiration feature not enabled for #{self.class}.
-        Key: #{dbkey} Arg: #{expiration} (caller: #{caller(1..1)})
+        Key: #{Familia.loggable_text(dbkey)} Arg: #{expiration} (caller: #{Familia.loggable_text(caller(1..1))})
       LOG
       nil
     end

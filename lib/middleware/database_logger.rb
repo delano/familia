@@ -411,12 +411,41 @@ module DatabaseLogger
       @logger.trace(message)
     end
 
+    # Returns valid UTF-8 or ASCII-only text, which CommandMessage#inspect
+    # can format and a JSON log sink can encode. When the arguments carry
+    # non-ASCII bytes in another encoding (e.g. a BINARY member), in
+    # incompatible encodings (e.g. a UTF-8 key with a BINARY member) or in
+    # invalid UTF-8, each argument is rendered as UTF-8 with invalid bytes
+    # escaped as \xNN.
+    #
     # @api private
     def command_string(raw, mode)
+      text = join_command(raw, mode)
+      return text if text.ascii_only?
+      return text if text.encoding == Encoding::UTF_8 && text.valid_encoding?
+
+      join_command(loggable_args(raw), mode)
+    rescue Encoding::CompatibilityError
+      join_command(loggable_args(raw), mode)
+    end
+
+    # @api private
+    def join_command(raw, mode)
       if mode == :pipeline
         raw.map { |cmd| cmd.join(' ') }.join(' | ')
       else
         raw.join(' ')
+      end
+    end
+
+    # @api private
+    def loggable_args(args)
+      args.map do |arg|
+        next loggable_args(arg) if arg.is_a?(Array)
+
+        arg.to_s.dup.force_encoding(Encoding::UTF_8).scrub do |bytes|
+          bytes.each_byte.map { |byte| format('\\x%02X', byte) }.join
+        end
       end
     end
 

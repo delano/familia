@@ -452,13 +452,14 @@ module Familia
     #
     def dirty_write_message(new_record, dirty)
       fields = dirty.join(', ')
+      shown_key = Familia.loggable_text(dbkey)
       if new_record
-        "Writing to #{self.class.name} #{dbkey} while parent " \
+        "Writing to #{self.class.name} #{shown_key} while parent " \
           "#{@parent_ref.class.name} is a new, unsaved object (no hash key " \
           "exists yet) with unsaved scalar fields: #{fields}. Save the parent " \
           "before mutating its collections to avoid orphaned data. #{DIRTY_WRITE_HINT}"
       else
-        "Writing to #{self.class.name} #{dbkey} while parent " \
+        "Writing to #{self.class.name} #{shown_key} while parent " \
           "#{@parent_ref.class.name} has unsaved scalar fields: #{fields}. #{DIRTY_WRITE_HINT}"
       end
     end

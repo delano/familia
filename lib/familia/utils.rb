@@ -138,11 +138,99 @@ module Familia
       val.is_a?(String) && val.length > 2 && val.start_with?('"') && val.end_with?('"')
     end
 
+    # Whether +value.to_s+ is empty or holds only whitespace and NULs, the
+    # field values the indexes skip. String#strip raises ArgumentError or
+    # Encoding::CompatibilityError on a String whose bytes are not valid in
+    # its encoding, such as a field value given as BINARY "r\xFEle" and
+    # loaded back as UTF-8 with the same bytes, so such a String is checked
+    # as bytes. The characters strip removes are all ASCII, so the answer is
+    # the same for a valid String.
+    #
+    # @param value [#to_s] field value
+    # @return [Boolean]
+    # @api private
+    def blank_text?(value)
+      text = value.to_s
+      text = text.b unless text.valid_encoding?
+      text.strip.empty?
+    end
+
+    # Returns +str+ in the encoding redis-client gives a key or member with
+    # the same bytes: UTF-8 when the bytes are valid UTF-8, BINARY otherwise.
+    # (redis-client labels each bulk string it reads as UTF-8 and relabels it
+    # BINARY unless it is valid.) The bytes are not changed.
+    #
+    # Every key {#join} builds goes through here, so a key is one String
+    # value wherever it comes from. Before, a key built from a UTF-8
+    # identifier with invalid bytes was UTF-8 while the same key built from
+    # the member read back was BINARY, and the two were neither == nor equal
+    # as Hash keys.
+    #
+    # @param str [#to_s] key, key part or identifier
+    # @return [String] a UTF-8 String when the bytes are valid UTF-8, else a
+    #   BINARY String; +str+ itself when it is already a valid UTF-8 String
+    def normalize_key_encoding(str)
+      text = str.to_s
+      text = text.dup.force_encoding(Encoding::UTF_8) unless text.encoding == Encoding::UTF_8
+      text.valid_encoding? ? text : text.b
+    end
+
+    # Returns +value+ as text that a log line or error message can put next
+    # to any other UTF-8 text: +value.to_s+ itself when it is ASCII-only or
+    # valid UTF-8, otherwise a UTF-8 copy of its bytes with each byte that is
+    # not valid UTF-8 written as \xNN.
+    #
+    # A key {#join} builds from an identifier that is not valid UTF-8 is
+    # BINARY, as is a key or member redis-client reads with such bytes.
+    # Interpolating one into a message that also holds non-ASCII UTF-8 text,
+    # such as a member, a field value or an exception message, raises
+    # Encoding::CompatibilityError. Messages pass keys, and any value they
+    # hold as is, through here.
+    #
+    # @param value [#to_s] key, identifier or other value to show
+    # @return [String] ASCII-only or valid UTF-8 text
+    # @api private
+    def loggable_text(value)
+      text = value.to_s
+      return text if text.ascii_only? || (text.encoding == Encoding::UTF_8 && text.valid_encoding?)
+
+      text.dup.force_encoding(Encoding::UTF_8).scrub do |bytes|
+        bytes.each_byte.map { |byte| format('\\x%02X', byte) }.join
+      end
+    end
+
     # Joins array elements with Familia delimiter
+    #
+    # The result has the encoding {#normalize_key_encoding} gives it: UTF-8
+    # when its bytes are valid UTF-8, BINARY otherwise. So a key built from
+    # an identifier is == to the same key read back from the server, whatever
+    # encoding the identifier was given in.
+    #
+    # When the parts carry non-ASCII bytes in incompatible encodings, such as
+    # a non-ASCII class prefix (e.g. 'équipe') with an identifier that
+    # redis-client returned as BINARY because it is not valid UTF-8, the
+    # parts are joined as bytes.
+    #
     # @param val [Array] elements to join
     # @return [String] joined string
     def join(*val)
-      val.compact.join(Familia.delim)
+      parts = val.compact
+      key = begin
+        parts.join(Familia.delim)
+      rescue Encoding::CompatibilityError
+        # Join as bytes, recursing into nested arrays as Array#join does, so
+        # an empty nested array keeps its separators and the key does not
+        # depend on the parts' encodings.
+        delim = Familia.delim.to_s.b
+        join_bytes = lambda do |list|
+          list.map { |part| part.is_a?(Array) ? join_bytes.call(part) : part.to_s.b }.join(delim)
+        end
+        join_bytes.call(parts)
+      end
+      # Array#join returns a new String that nothing else holds, so it is
+      # relabelled in place, as normalize_key_encoding would label a copy.
+      key.force_encoding(Encoding::UTF_8) unless key.encoding == Encoding::UTF_8
+      key.valid_encoding? ? key : key.force_encoding(Encoding::BINARY)
     end
 
     # Splits a string using Familia delimiter

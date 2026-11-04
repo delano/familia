@@ -210,8 +210,12 @@ module Familia
           # would see a bare nil (aborted EXEC). Treat both as an abort so the
           # retry fires either way.
           if txn_result.nil? || (txn_result.is_a?(MultiResult) && txn_result.aborted?)
+            # Each key passes through Familia.loggable_text: joining a BINARY
+            # key with a non-ASCII UTF-8 one raises Encoding::CompatibilityError,
+            # which would replace this error and skip the retry.
+            shown_keys = watch_keys.map { |key| Familia.loggable_text(key) }
             raise WatchAbortError,
-                  "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
+                  "WATCH detected concurrent modification of #{shown_keys.join(', ')}"
           end
           txn_result
         rescue WatchAbortError
