@@ -65,7 +65,11 @@ Fixed
   the own entry of a record with an Integer identifier when the application
   declared the index hashkey itself, before ``unique_index``; for another
   record's entry in such an index they raise ``Familia::RecordExistsError``.
-  PR #453
+  As 2.14 did for ``'q'`` against ``'"q"'``, they read a stored owner
+  wrapped in one pair of double quotes as the identifier inside, so a
+  record given ``"\xFF"`` now passes them and takes the entry of a record
+  whose identifier is ``"\"\xFF\""``. Do not use identifiers that start
+  and end with a double quote with unique indexes. PR #453
 - ``audit_participations``, and so ``health_check``, of a class whose prefix
   holds non-ASCII characters no longer raise ``Encoding::CompatibilityError``
   when an identifier that is not valid UTF-8 is a member of a participation

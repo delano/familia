@@ -327,7 +327,12 @@ module Familia
               # @param scope_instance [Object] The scope instance providing uniqueness context (e.g., a Company)
               # @raise [Familia::RecordExistsError] if a different record holds the same
               #   field value in the scope's index. Field values and identifiers are
-              #   compared as strings, and identifiers by their bytes.
+              #   compared as strings, and identifiers by their bytes. A stored owner
+              #   wrapped in one pair of double quotes is read as the legacy
+              #   JSON-encoded form of the identifier inside, so a record whose
+              #   identifier is that inner text passes, and the claim that follows
+              #   takes the entry. Do not use identifiers that start and end with a
+              #   double quote with unique indexes (see HashKey#ownership_variants).
               # @return [void]
               #
               # @example
@@ -652,7 +657,12 @@ module Familia
               #
               # @raise [Familia::RecordExistsError] if a different record holds the
               # same field value. Field values and identifiers are compared as
-              # strings, and identifiers by their bytes.
+              # strings, and identifiers by their bytes. A stored owner wrapped in
+              # one pair of double quotes is read as the legacy JSON-encoded form
+              # of the identifier inside, so a record whose identifier is that
+              # inner text passes, and the claim that follows takes the entry. Do
+              # not use identifiers that start and end with a double quote with
+              # unique indexes (see HashKey#ownership_variants).
               #
               # @return [void]
               define_method(:"guard_unique_#{index_name}!") do
