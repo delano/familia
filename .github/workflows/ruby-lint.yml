@@ -2,9 +2,16 @@
 
 name: Ruby Lint
 
-# Runs RuboCop across the supported Ruby versions. Linting is informational:
-# every dependency/lint step is continue-on-error, so style findings surface as
-# annotations without blocking merges.
+# Runs RuboCop across the supported Ruby versions and fails the job on any
+# offense that .rubocop_todo.yml does not baseline (see the header of
+# .rubocop.yml). It uses RuboCop's default fail level, so convention and
+# refactor offenses fail the job as well as warnings. Offenses are also
+# emitted as GitHub annotations. The bundle is installed frozen from
+# Gemfile.lock, so the job runs the RuboCop and plugin versions the baseline
+# was generated with.
+#
+# Reek is not run here. It runs in code-smells.yml, where it is advisory:
+# its exit code is ignored and the step is continue-on-error.
 
 on:
   push:
@@ -33,16 +40,23 @@ jobs:
 
     runs-on: ubuntu-24.04
 
+    env:
+      # Never re-resolve the bundle: RuboCop must be the version locked in
+      # Gemfile.lock. setup-ruby's bundler-cache already installs in
+      # deployment mode when the lockfile exists; this keeps the guarantee
+      # explicit for every bundle command in the job.
+      BUNDLE_FROZEN: 'true'
+
     strategy:
       fail-fast: true
       matrix:
         ruby: ['3.2', '3.3', '3.4', '3.5', '4.0']
-        continue-on-error: [true]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # Installs the bundle from Gemfile.lock into vendor/bundle and caches it.
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
@@ -54,13 +68,7 @@ jobs:
         with:
           detached: true
 
-      - name: Install dependencies
-        continue-on-error: ${{ matrix.continue-on-error }}
+      - name: Run RuboCop
         run: |
-          bundle config path vendor/bundle
-          bundle install --jobs 4 --retry 3
-
-      - name: Run Rubocop
-        continue-on-error: ${{ matrix.continue-on-error }}
-        run: |
-          bundle exec rubocop --config .rubocop.yml --format json --fail-level warning
+          bundle exec rubocop --verbose-version
+          bundle exec rubocop --config .rubocop.yml --format progress --format github
