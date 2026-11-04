@@ -73,9 +73,9 @@ module Familia
 
     def build_message
       if resolved_key.nil?
-        "Stored values at #{key} give no identifier"
+        "Stored values at #{Familia.loggable_text(key)} give no identifier"
       else
-        "Stored values at #{key} name a different key: #{resolved_key}"
+        "Stored values at #{Familia.loggable_text(key)} name a different key: #{Familia.loggable_text(resolved_key)}"
       end
     end
   end

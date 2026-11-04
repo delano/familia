@@ -54,24 +54,32 @@ module Familia
             return nil if field_value.nil?
 
             str_value = field_value.to_s
-            return nil if str_value.strip.empty?
+            return nil if Familia.blank_text?(str_value)
+
+            # The patterns below are ASCII, so a value whose bytes are not
+            # valid in its encoding, which a regexp match raises on, is
+            # matched as bytes.
+            matchable = str_value.valid_encoding? ? str_value : str_value.b
 
             # Warn on values containing Redis glob pattern characters
             # These are legal but can be confusing when debugging key patterns
-            if str_value.match?(/[*?\[\]]/)
+            if matchable.match?(/[*?\[\]]/)
               Familia.warn "[#{context}] Field value contains glob pattern characters: #{str_value.inspect}. " \
                            'These are stored as literal characters but may be confusing during debugging.'
             end
 
             # Warn on control characters (except common whitespace)
-            if str_value.match?(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/)
+            if matchable.match?(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/)
               Familia.warn "[#{context}] Field value contains control characters: #{str_value.inspect}"
             end
 
-            # Warn on excessively long values
+            # Warn on excessively long values. The start of the value passes
+            # through Familia.loggable_text: a BINARY slice with non-ASCII
+            # bytes next to a non-ASCII class name in +context+ would raise
+            # Encoding::CompatibilityError.
             if str_value.length > MAX_FIELD_VALUE_LENGTH
               Familia.warn "[#{context}] Field value exceeds #{MAX_FIELD_VALUE_LENGTH} characters " \
-                           "(#{str_value.length} chars): #{str_value[0..50]}..."
+                           "(#{str_value.length} chars): #{Familia.loggable_text(str_value[0..50])}..."
             end
 
             str_value
@@ -134,7 +142,7 @@ module Familia
           # @param field_value [Object]
           # @return [Boolean]
           def blank_field_value?(field_value)
-            field_value.nil? || field_value.to_s.strip.empty?
+            field_value.nil? || Familia.blank_text?(field_value)
           end
 
           # Yields the keys of the per-value bucket sets of +index_name+ on
@@ -556,7 +564,7 @@ module Familia
                     objects.each do |obj|
                       value = obj.send(field)
                       # Only track non-nil, non-empty field values
-                      field_values << value.to_s if value && !value.to_s.strip.empty?
+                      field_values << value.to_s if value && !Familia.blank_text?(value)
                     end
 
                     processed += identifiers.size
@@ -883,7 +891,7 @@ module Familia
 
                 objects.each do |obj|
                   value = obj.send(field)
-                  field_values << value.to_s if value && !value.to_s.strip.empty?
+                  field_values << value.to_s if value && !Familia.blank_text?(value)
                 end
 
                 processed += identifiers.size
@@ -910,7 +918,7 @@ module Familia
                 dbclient.multi do |conn|
                   objects.each do |obj|
                     field_value = obj.send(field)
-                    next unless field_value && !field_value.to_s.strip.empty?
+                    next unless field_value && !Familia.blank_text?(field_value)
 
                     index_set = send("#{index_name}_for", field_value)
                     conn.sadd(index_set.dbkey, index_set.serialize_value(obj.identifier))
@@ -945,7 +953,7 @@ module Familia
 
               define_method(method_name) do
                 field_value = send(field)
-                return unless field_value && !field_value.to_s.strip.empty?
+                return unless field_value && !Familia.blank_text?(field_value)
 
                 _ensure_persisted_before_index_write!(index_name)
 
@@ -958,7 +966,7 @@ module Familia
 
               define_method(method_name) do
                 field_value = send(field)
-                return unless field_value && !field_value.to_s.strip.empty?
+                return unless field_value && !Familia.blank_text?(field_value)
 
                 index_set = self.class.send("#{index_name}_for", field_value)
                 index_set.remove(identifier)
@@ -992,7 +1000,7 @@ module Familia
                   end
 
                   # Add to new index if present
-                  if new_field_value && !new_field_value.to_s.strip.empty?
+                  if new_field_value && !Familia.blank_text?(new_field_value)
                     new_set = self.class.send("#{index_name}_for", new_field_value)
                     conn.sadd(new_set.dbkey, serialized_id)
                   end

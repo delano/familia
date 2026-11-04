@@ -327,7 +327,12 @@ module Familia
               # @param scope_instance [Object] The scope instance providing uniqueness context (e.g., a Company)
               # @raise [Familia::RecordExistsError] if a different record holds the same
               #   field value in the scope's index. Field values and identifiers are
-              #   compared as strings.
+              #   compared as strings, and identifiers by their bytes. A stored owner
+              #   wrapped in one pair of double quotes is read as the legacy
+              #   JSON-encoded form of the identifier inside, so a record whose
+              #   identifier is that inner text passes, and the claim that follows
+              #   takes the entry. Do not use identifiers that start and end with a
+              #   double quote with unique indexes (see HashKey#ownership_variants).
               # @return [void]
               #
               # @example
@@ -348,10 +353,17 @@ module Familia
                 index_hash = scope_instance.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
 
-                # The index is a reference hash, so existing_id is the stored
-                # String. Compare it with the identifier's string form, or a
+                # An index Familia declared is a reference hash, so
+                # existing_id is the stored String; one the application
+                # declared itself deserializes JSON and returns an Integer
+                # identifier as an Integer. Compare the string forms, or a
                 # record with an Integer identifier is refused its own entry.
-                if existing_id && existing_id != identifier.to_s
+                # Compare the bytes when the Strings differ: the stored one is
+                # BINARY when its bytes are not valid UTF-8, while a loaded
+                # record's identifier is UTF-8 with the same bytes.
+                owner = identifier.to_s
+                stored = existing_id.to_s
+                if existing_id && stored != owner && stored.b != owner.b
                   raise Familia::RecordExistsError.new(
                     "#{self.class} exists in #{scope_instance.class} with #{field}=#{field_value}",
                     existing_id: existing_id,
@@ -645,7 +657,12 @@ module Familia
               #
               # @raise [Familia::RecordExistsError] if a different record holds the
               # same field value. Field values and identifiers are compared as
-              # strings.
+              # strings, and identifiers by their bytes. A stored owner wrapped in
+              # one pair of double quotes is read as the legacy JSON-encoded form
+              # of the identifier inside, so a record whose identifier is that
+              # inner text passes, and the claim that follows takes the entry. Do
+              # not use identifiers that start and end with a double quote with
+              # unique indexes (see HashKey#ownership_variants).
               #
               # @return [void]
               define_method(:"guard_unique_#{index_name}!") do
@@ -657,10 +674,17 @@ module Familia
                 index_hash = self.class.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
 
-                # The index is a reference hash, so existing_id is the stored
-                # String. Compare it with the identifier's string form, or a
+                # An index Familia declared is a reference hash, so
+                # existing_id is the stored String; one the application
+                # declared itself deserializes JSON and returns an Integer
+                # identifier as an Integer. Compare the string forms, or a
                 # record with an Integer identifier is refused its own entry.
-                if existing_id && existing_id != identifier.to_s
+                # Compare the bytes when the Strings differ: the stored one is
+                # BINARY when its bytes are not valid UTF-8, while a loaded
+                # record's identifier is UTF-8 with the same bytes.
+                owner = identifier.to_s
+                stored = existing_id.to_s
+                if existing_id && stored != owner && stored.b != owner.b
                   raise Familia::RecordExistsError.new(
                     "#{self.class} exists #{field}=#{field_value}",
                     existing_id: existing_id,

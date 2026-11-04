@@ -218,7 +218,7 @@ module Familia
               next unless obj
 
               field_value = obj.send(rel.field)
-              next if field_value.nil? || field_value.to_s.strip.empty?
+              next if field_value.nil? || Familia.blank_text?(field_value)
 
               lookups << [identifier, field_value.to_s]
             end
@@ -411,8 +411,12 @@ module Familia
             next
           end
 
-          # Verify field value still matches
-          current_value = obj.send(field).to_s
+          # Verify field value still matches. The field value is compared in
+          # the encoding the client gives the index's field names (see
+          # Familia.normalize_key_encoding): a value with bytes that are not
+          # valid UTF-8 loads as UTF-8 and is read back from the index as
+          # BINARY.
+          current_value = Familia.normalize_key_encoding(obj.send(field).to_s)
           unless current_value == field_value
             stale << { field_value: field_value, indexed_id: identifier, reason: :value_mismatch,
                        current_value: current_value }
@@ -431,9 +435,12 @@ module Familia
           next unless obj
 
           value = obj.send(field)
-          next if value.nil? || value.to_s.strip.empty?
+          next if value.nil? || Familia.blank_text?(value)
 
-          missing << { identifier: identifier, field_value: value.to_s } unless indexed_values.include?(value.to_s)
+          expected_value = Familia.normalize_key_encoding(value.to_s)
+          next if indexed_values.include?(expected_value)
+
+          missing << { identifier: identifier, field_value: expected_value }
         end
 
         { index_name: index_name, stale: stale, missing: missing }
@@ -635,7 +642,10 @@ module Familia
           }
         end
 
-        current_value = obj.send(rel.field).to_s
+        # +field_value+ is part of a bucket key the client returned, so
+        # compare the record's value in the encoding the client gives the
+        # same bytes (see Familia.normalize_key_encoding).
+        current_value = Familia.normalize_key_encoding(obj.send(rel.field).to_s)
         return nil if current_value == field_value
 
         {
@@ -667,9 +677,9 @@ module Familia
           next unless obj
 
           value = obj.send(rel.field)
-          next if value.nil? || value.to_s.strip.empty?
+          next if value.nil? || Familia.blank_text?(value)
 
-          expected_value = value.to_s
+          expected_value = Familia.normalize_key_encoding(value.to_s)
           actual_field_values << expected_value
 
           next if discovered_field_values.include?(expected_value)
@@ -892,7 +902,12 @@ module Familia
       # The key is compared and split as bytes, so a key with invalid
       # UTF-8, which the client returns as a binary String, does not raise
       # Encoding::CompatibilityError against a +scope_prefix+ with
-      # non-ASCII characters. Both parts keep the encoding of the key.
+      # non-ASCII characters. Each part is returned in the encoding
+      # Familia.normalize_key_encoding gives its own bytes, whichever part
+      # made the key BINARY: a scope id that is not valid UTF-8 is BINARY,
+      # like the members of the scope class's instances, and a field value
+      # that is valid UTF-8 is UTF-8, like the indexed field's value. The
+      # audit compares both with those.
       #
       # @param key [String]
       # @param scope_prefix [String]
@@ -910,7 +925,7 @@ module Familia
 
         scope_id = bkey.byteslice(prefix.bytesize, marker_pos - prefix.bytesize)
         field_value = bkey.byteslice((marker_pos + bmarker.bytesize)..)
-        [scope_id.force_encoding(key.encoding), field_value.force_encoding(key.encoding)]
+        [Familia.normalize_key_encoding(scope_id), Familia.normalize_key_encoding(field_value)]
       end
 
       # Assigns each bucket key in +parsed+ to the scope whose rebuild
@@ -1112,9 +1127,9 @@ module Familia
             next unless obj
 
             value = obj.send(rel.field)
-            next if value.nil? || value.to_s.strip.empty?
+            next if value.nil? || Familia.blank_text?(value)
 
-            expected_field_value = value.to_s
+            expected_field_value = Familia.normalize_key_encoding(value.to_s)
             expected_key = build_instance_scoped_bucket_key(scope_class, scope_id, rel.index_name, expected_field_value)
             bucket = bucket_entries[expected_key]
             next if bucket && bucket[:identifiers].any? { |m| m.to_s == identifier.to_s }
@@ -1153,9 +1168,9 @@ module Familia
             next unless obj
 
             value = obj.send(rel.field)
-            next if value.nil? || value.to_s.strip.empty?
+            next if value.nil? || Familia.blank_text?(value)
 
-            result[scope_id] << value.to_s
+            result[scope_id] << Familia.normalize_key_encoding(value.to_s)
           end
         end
 
@@ -1206,11 +1221,15 @@ module Familia
 
       # Rebuilds the expected bucket key for a (scope_id, field_value) pair.
       #
+      # The key is built the way the scope instance's +<index_name>_for+
+      # factory builds it (MultiIndexGenerators.generate_factory_method), so
+      # it is == to the key SCAN returned for the bucket whatever the
+      # encodings of the scope prefix and the scope_id.
+      #
       # @return [String]
       #
       def build_instance_scoped_bucket_key(scope_class, scope_id, index_name, field_value)
-        d = Familia.delim
-        "#{scope_class.prefix}#{d}#{scope_id}#{d}#{index_name}#{d}#{field_value}"
+        scope_class.dbkey(scope_id, Familia.join(index_name, field_value))
       end
 
       # Audit a class-level participation collection (from class_participates_in).

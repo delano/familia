@@ -292,8 +292,10 @@ module Familia
           # full key and not just the identifier.
           does_exist = Familia.positive?(dbclient.exists(objkey))
 
-          Familia.debug "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey if Familia.debug?
+          if Familia.debug?
+            Familia.debug "[find_by_key] #{self} from key #{Familia.loggable_text(objkey)} (exists: #{does_exist})"
+            Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
+          end
 
           # This is the reason for calling exists first. We want to definitively
           # and without any ambiguity know if the object exists in the database. If it
@@ -303,12 +305,14 @@ module Familia
           return nil unless does_exist
         else
           # Optimized mode: Skip existence check
-          Familia.debug "[find_by_key] #{self} from key #{objkey} (check_exists: false)"
-          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey if Familia.debug?
+          if Familia.debug?
+            Familia.debug "[find_by_key] #{self} from key #{Familia.loggable_text(objkey)} (check_exists: false)"
+            Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
+          end
         end
 
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
-        Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}" if Familia.debug?
+        Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{Familia.loggable_text(objkey)}: #{obj.inspect}" if Familia.debug?
 
         # Always check for empty hash to handle race conditions where the key
         # expires between EXISTS check and HGETALL (when check_exists: true),
@@ -392,8 +396,10 @@ module Familia
 
         objkey = dbkey(identifier, suffix)
 
-        Familia.debug "[find_by_id] #{self} from key #{objkey})"
-        Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
+        if Familia.debug?
+          Familia.debug "[find_by_id] #{self} from key #{Familia.loggable_text(objkey)})"
+          Familia.trace :FIND_BY_ID, nil, objkey
+        end
         find_by_dbkey objkey, check_exists: check_exists
       end
       alias find_by_id find_by_identifier
@@ -636,7 +642,10 @@ module Familia
 
             fields.each do |name, _definition|
               obj = temp_instance.send(name)
-              Familia.trace :DESTROY_RELATION!, name, "Deleting related field #{name} (#{obj.dbkey})" if Familia.debug?
+              if Familia.debug?
+                Familia.trace :DESTROY_RELATION!, name,
+                              "Deleting related field #{name} (#{Familia.loggable_text(obj.dbkey)})"
+              end
               conn.del(obj.dbkey)
             end
           end

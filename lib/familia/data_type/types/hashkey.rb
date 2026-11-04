@@ -150,10 +150,14 @@ module Familia
       ret
     rescue TypeError => e
       Familia.error "[hset]= #{e.message}"
-      Familia.debug "[hset]= #{dbkey} #{field}=#{val}"
+      if Familia.debug?
+        Familia.debug "[hset]= #{Familia.loggable_text(dbkey)} " \
+                      "#{Familia.loggable_text(field)}=#{Familia.loggable_text(val)}"
+      end
       echo :hset, Familia.pretty_stack(limit: 1) if Familia.debug # logs via echo to the db and back
       klass = val.class
-      msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
+      msg = "Cannot store #{Familia.loggable_text(field)} => #{val.inspect} (#{klass}) " \
+            "in #{Familia.loggable_text(dbkey)}"
       raise e.class, msg
     end
     alias put []=
@@ -234,10 +238,14 @@ module Familia
       ret
     rescue TypeError => e
       Familia.error "[hsetnx] #{e.message}"
-      Familia.debug "[hsetnx] #{dbkey} #{field}=#{val}"
+      if Familia.debug?
+        Familia.debug "[hsetnx] #{Familia.loggable_text(dbkey)} " \
+                      "#{Familia.loggable_text(field)}=#{Familia.loggable_text(val)}"
+      end
       echo :hsetnx, Familia.pretty_stack(limit: 1) if Familia.debug # logs via echo to the db and back
       klass = val.class
-      msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
+      msg = "Cannot store #{Familia.loggable_text(field)} => #{val.inspect} (#{klass}) " \
+            "in #{Familia.loggable_text(dbkey)}"
       raise e.class, msg
     end
 
@@ -690,7 +698,7 @@ module Familia
       # leaves no gap for the key to expire or be deleted before the read.
       raise Familia::KeyNotFoundError, dbkey if fields.empty?
 
-      Familia.debug "[refresh!] #{self.class} #{dbkey} #{fields.keys}"
+      Familia.debug "[refresh!] #{self.class} #{Familia.loggable_text(dbkey)} #{fields.keys}" if Familia.debug?
       fields
     end
 

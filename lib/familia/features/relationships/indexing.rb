@@ -603,12 +603,22 @@ module Familia
           # -- so the value is part of the identity and each bucket gets its
           # own entry.
           #
+          # The parts are joined as bytes. A scope identifier that is not
+          # valid UTF-8 is BINARY when the scope was built from a member or
+          # tracker entry read back from the server (as destroy! and save
+          # build it), and interpolating it with a non-ASCII UTF-8 field
+          # value raised Encoding::CompatibilityError: in add_to_* after the
+          # index write, leaving the entry untracked, and in destroy! and
+          # save before anything was removed or saved. The entry gets the
+          # encoding Familia.normalize_key_encoding gives its bytes, which is
+          # the encoding the client gives the tracker field read back.
+          #
           # @return [String]
           def _index_scope_entry(scope_config, index_name, scope_instance, field_value, cardinality)
-            entry = "#{scope_config}\t#{index_name}\t#{scope_instance.identifier}"
-            return entry unless cardinality == :multi
+            parts = [scope_config, index_name, scope_instance.identifier]
+            parts << field_value if cardinality == :multi
 
-            "#{entry}\t#{field_value}"
+            Familia.normalize_key_encoding(parts.map { |part| part.to_s.b }.join("\t".b))
           end
 
           # Split a tracker entry back into its membership parts.
