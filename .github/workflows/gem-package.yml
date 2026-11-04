@@ -1,0 +1,143 @@
+# .github/workflows/gem-package.yml
+
+name: Gem Package
+
+# Builds familia.gemspec into a .gem file, installs that file into an empty
+# GEM_HOME and runs try/support/smoke/installed_gem.rb against Valkey. The
+# other jobs load familia from the checkout (the build matrix) or through a
+# Bundler path: source (consumer-load), so neither one exercises the
+# packaged artifact. spec.files comes from `git ls-files`, so the package is
+# whatever this checkout tracks.
+#
+# One Ruby: 3.3, the version release-gem.yml builds the published gem with,
+# so the artifact under test comes from the same Ruby and RubyGems line as a
+# release. Keep the two in step. The build matrix and consumer-load cover the
+# other supported Rubies.
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Unlike the implicit default shell, this one sets -o pipefail.
+    shell: bash
+
+jobs:
+  installed-gem:
+    name: Build, install and smoke-test the gem
+    timeout-minutes: 10
+
+    runs-on: ubuntu-24.04
+
+    services:
+      valkey:
+        image: valkey/valkey:8.1-bookworm
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+        ports:
+          - 6379:6379
+
+    env:
+      FAMILIA_SMOKE_URI: redis://127.0.0.1:6379/0
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          # Nothing here installs the repo's bundle. The optional consumer
+          # below uses the Bundler that ships with this Ruby.
+          bundler: none
+
+      - name: Build the gem
+        id: build
+        run: |
+          version=$(ruby -e 'print Gem::Specification.load("familia.gemspec").version')
+          gem_file="$RUNNER_TEMP/pkg/familia-$version.gem"
+          mkdir -p "$RUNNER_TEMP/pkg"
+          gem build familia.gemspec --output "$gem_file" 2>&1 | tee "$RUNNER_TEMP/gem-build.log"
+          test -s "$gem_file"
+          if grep -q '^WARNING' "$RUNNER_TEMP/gem-build.log"; then
+            sed -n 's/^WARNING: *//p' "$RUNNER_TEMP/gem-build.log" | while IFS= read -r line; do
+              echo "::warning title=gem build::$line"
+            done
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "gem-file=$gem_file" >> "$GITHUB_OUTPUT"
+
+      # Every file git tracks under lib/ must ship. A narrower gemspec filter
+      # would otherwise drop a file that only breaks the feature using it.
+      - name: Check the packaged file list
+        env:
+          GEM_FILE: ${{ steps.build.outputs.gem-file }}
+        run: |
+          ruby -rrubygems/package - "$GEM_FILE" <<'RUBY'
+            packaged = Gem::Package.new(ARGV.fetch(0)).contents
+            tracked = IO.popen(%w[git ls-files -z -- lib], &:read).split("\0")
+            abort 'git ls-files failed' unless $?.success?
+            missing = (%w[lib/familia.rb lib/familia/version.rb] | tracked) - packaged
+            missing.each { |path| puts "::error title=Missing from the gem::#{path}" }
+            exit 1 unless missing.empty?
+            puts "#{packaged.size} files packaged, including all #{tracked.size} tracked under lib/"
+          RUBY
+
+      # No Bundler and no path: source. Runtime dependencies resolve from
+      # rubygems.org, as they would for an application.
+      - name: Install the gem into an empty GEM_HOME
+        env:
+          GEM_FILE: ${{ steps.build.outputs.gem-file }}
+        run: |
+          unset BUNDLE_GEMFILE RUBYOPT RUBYLIB
+          export GEM_HOME="$RUNNER_TEMP/gem-home" GEM_PATH="$RUNNER_TEMP/gem-home"
+          gem install "$GEM_FILE" --no-document
+
+      - name: Smoke-test the installed gem without Bundler
+        env:
+          FAMILIA_SMOKE_EXPECT_VERSION: ${{ steps.build.outputs.version }}
+          FAMILIA_SMOKE_EXPECT_BUNDLER: "false"
+        run: |
+          unset BUNDLE_GEMFILE RUBYOPT RUBYLIB
+          export GEM_HOME="$RUNNER_TEMP/gem-home" GEM_PATH="$RUNNER_TEMP/gem-home"
+          cd "$RUNNER_TEMP"
+          ruby "$GITHUB_WORKSPACE/try/support/smoke/installed_gem.rb"
+
+      # An application that bundles the built gem from vendor/cache. familia
+      # is uninstalled first so Bundler must install it from the .gem file;
+      # --local keeps Bundler off rubygems.org, which can hold a release with
+      # the same version number. The other dependencies come from the step
+      # above. --no-cache stops Bundler copying them into vendor/cache, which
+      # fails for default gems such as bigdecimal: they have no .gem file.
+      - name: Smoke-test the gem through a Bundler consumer
+        env:
+          GEM_FILE: ${{ steps.build.outputs.gem-file }}
+          FAMILIA_VERSION: ${{ steps.build.outputs.version }}
+          FAMILIA_SMOKE_EXPECT_VERSION: ${{ steps.build.outputs.version }}
+          FAMILIA_SMOKE_EXPECT_BUNDLER: "true"
+        run: |
+          unset RUBYOPT RUBYLIB
+          export GEM_HOME="$RUNNER_TEMP/gem-home" GEM_PATH="$RUNNER_TEMP/gem-home"
+          gem uninstall familia --version "$FAMILIA_VERSION" --ignore-dependencies --executables
+          consumer="$RUNNER_TEMP/bundler-consumer"
+          mkdir -p "$consumer/vendor/cache"
+          cp "$GEM_FILE" "$consumer/vendor/cache/"
+          cd "$consumer"
+          printf "source 'https://rubygems.org'\ngem 'familia', '%s'\n" "$FAMILIA_VERSION" > Gemfile
+          export BUNDLE_GEMFILE="$consumer/Gemfile"
+          bundle install --local --no-cache
+          bundle exec ruby "$GITHUB_WORKSPACE/try/support/smoke/installed_gem.rb"
