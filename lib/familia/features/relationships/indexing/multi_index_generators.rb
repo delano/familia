@@ -73,10 +73,13 @@ module Familia
               Familia.warn "[#{context}] Field value contains control characters: #{str_value.inspect}"
             end
 
-            # Warn on excessively long values
+            # Warn on excessively long values. The start of the value passes
+            # through Familia.loggable_text: a BINARY slice with non-ASCII
+            # bytes next to a non-ASCII class name in +context+ would raise
+            # Encoding::CompatibilityError.
             if str_value.length > MAX_FIELD_VALUE_LENGTH
               Familia.warn "[#{context}] Field value exceeds #{MAX_FIELD_VALUE_LENGTH} characters " \
-                           "(#{str_value.length} chars): #{str_value[0..50]}..."
+                           "(#{str_value.length} chars): #{Familia.loggable_text(str_value[0..50])}..."
             end
 
             str_value
