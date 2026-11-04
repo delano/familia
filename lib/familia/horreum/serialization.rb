@@ -207,7 +207,8 @@ module Familia
       # @param dbkey [String, nil] Optional key the value was read from, named
       #   in the error log entry for a value that is not JSON. Without it the
       #   entry names the key built from the identifier field's current value,
-      #   or +no dbkey+.
+      #   or +no dbkey+. The hydration paths pass it only when
+      #   {#deserialize_value_takes_dbkey?} is true.
       # @return [Object] The deserialized value with original Ruby type, or the original string if not JSON
       #
       def deserialize_value(val, symbolize: false, field_name: nil, dbkey: nil)
@@ -225,6 +226,31 @@ module Familia
       end
 
       private
+
+      # Whether {#deserialize_value} can be given +dbkey:+. An override with
+      # the signature from before +dbkey:+ was added,
+      # +deserialize_value(val, symbolize: false, field_name: nil)+, raises
+      # ArgumentError when given it. An override that takes +**+ can pass it
+      # on to super. So this is true only when every deserialize_value from
+      # this object up the super chain takes +dbkey:+, by name or through +**+.
+      #
+      # The chain is looked up on each call, so the answer follows a later
+      # prepend, reopened class or singleton method. The hydration paths call
+      # this once per record, not once per field.
+      #
+      # @return [Boolean]
+      def deserialize_value_takes_dbkey?
+        meth = method(:deserialize_value)
+        while meth
+          takes_dbkey = meth.parameters.any? do |type, name|
+            type == :keyrest || (name == :dbkey && %i[key keyreq].include?(type))
+          end
+          return false unless takes_dbkey
+
+          meth = meth.super_method
+        end
+        true
+      end
 
       def log_deserialization_issue(val, field_name, dbkey = nil)
         context = field_name ? "#{self.class}##{field_name}" : self.class.to_s

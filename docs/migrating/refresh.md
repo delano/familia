@@ -15,7 +15,7 @@ Check your code if it does any of the following:
 
 ### `Horreum#refresh!` raises `Familia::KeyNotFoundError` for a missing key (#443)
 
-The method was documented to raise `Familia::KeyNotFoundError` when the key does not exist, but it returned normally, kept the in-memory field values and cleared dirty tracking. It now raises, and the object is left as it was. `Horreum#refresh` behaves the same way.
+The method was documented to raise `Familia::KeyNotFoundError` when the key does not exist, but it returned normally (`refresh!` returned `[]`), kept the in-memory field values, including an `objid` generated to build the key, reset transient fields to `nil` and cleared dirty tracking. It now raises, and the object is left as it was. `Horreum#refresh` behaves the same way.
 
 ```ruby
 user = User.new(email: "alice@example.com")  # never saved

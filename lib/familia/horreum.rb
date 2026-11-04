@@ -470,11 +470,18 @@ module Familia
     # @param fields [Hash] field names to stored (serialized) values
     # @param dbkey [String, nil] the key the values were read from, named in
     #   the log entry for a value that is not JSON
-    #   (see {Familia::Horreum::Serialization#deserialize_value})
+    #   (see {Familia::Horreum::Serialization#deserialize_value}). It is
+    #   passed on only when deserialize_value takes it
+    #   (see {Familia::Horreum::Serialization#deserialize_value_takes_dbkey?}).
     # @return [Hash] the same keys with deserialized values
     def deserialize_stored_fields(fields, dbkey: nil)
+      pass_dbkey = dbkey && deserialize_value_takes_dbkey?
       fields.each_with_object({}) do |(field_name, value), hsh|
-        deserialized = deserialize_value(value, field_name: field_name, dbkey: dbkey)
+        deserialized = if pass_dbkey
+          deserialize_value(value, field_name: field_name, dbkey: dbkey)
+        else
+          deserialize_value(value, field_name: field_name)
+        end
         field_type = self.class.field_types[field_name.to_sym]
         deserialized = field_type.deserialize(deserialized, self) if field_type&.persistent?
         hsh[field_name] = deserialized

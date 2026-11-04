@@ -110,6 +110,22 @@ gems. Upgrade `oj`, or add `ostruct` to your Gemfile, to silence it.
 familia declares `json_schemer`, so an application needs no Gemfile entry
 for it. If you keep one, it must allow 2.2 or later.
 
+## Minimum `redis` version
+
+`familia.gemspec` now requires `redis` `>= 5.4, < 6.0` (was `>= 5.0, < 6.0`).
+A Gemfile or lockfile that pins `redis` below 5.4 no longer resolves with
+familia. Raise or remove the pin:
+
+```ruby
+# Gemfile
+gem 'redis', '>= 5.4', '< 6.0'
+```
+
+Some familia methods return `true` or `false` only with `redis` 5.4 or
+later. "familia requires redis-rb 5.4 or later" in
+[Command Replies Inside Transactions and Pipelines](transaction-replies.md#familia-requires-redis-rb-54-or-later)
+names them and what they would return with an older `redis`.
+
 ## Interactive migrations raise `PreconditionFailed`
 
 A `Familia::Migration::Model` migration with `@interactive = true` loads
