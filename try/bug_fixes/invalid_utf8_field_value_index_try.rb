@@ -16,7 +16,9 @@
 #   as stale, missing and orphaned, and repair rebuilt it on every run.
 #
 # 2.14 raised in Familia.join before writing such a record under a
-# non-ASCII prefix, and failed as above under an ASCII prefix. The blank
+# non-ASCII prefix. Under an ASCII prefix it raised from the blank checks,
+# before the patterns or the audit comparisons ran; the last two failures
+# above are what remained once the blank checks stopped raising. The blank
 # checks and patterns now read such a String as bytes, and the audits
 # compare the record's value in the encoding the client gives its bytes
 # (Familia.normalize_key_encoding).

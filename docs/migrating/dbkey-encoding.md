@@ -79,14 +79,18 @@ are read as UTF-8 and each byte that is not valid UTF-8 is written as `\xNN`:
 Structured log lines (`args=`) are unchanged.
 
 Familia's own log lines follow the same rule where they name a key next to
-other text: the deserialization, `find_by_id`, `commit_fields`, `refresh!`
-and `HashKey` write lines, the `key=value` context of `Familia.debug`,
-`Familia.info` and `Familia.error`, and `Familia.trace` output. So do the
-messages of the `TypeError` a `HashKey` store raises, of
-`Familia::IdentifierMismatchError` and of the dirty-write warning and error. A key
-whose bytes are not valid UTF-8 now reads `team:bin\xFE:members` there, with
-a literal backslash. The legacy JSON-encoded identifier warning writes `->`
-where it wrote `→`.
+other text: the deserialization, `find_by_id`, `commit_fields`, `refresh!`,
+`update_expiration`, `serialize_value` and `HashKey` write lines, the
+warning for an indexed field value longer than 256 characters, the
+`key=value` context of `Familia.debug`, `Familia.info` and `Familia.error`,
+and `Familia.trace` output. So do the messages of the `TypeError` a
+`HashKey` store raises, of `Familia::IdentifierMismatchError`, of
+`WatchAbortError` and of the dirty-write warning and error. A key whose
+bytes are not valid UTF-8 now reads `team:bin\xFE:members` there, with a
+literal backslash. Other log lines that name a key, such as those of the
+atomic index rebuild and of `repair_participations!`, write its bytes as
+they are. The legacy JSON-encoded identifier warning writes `->` where it
+wrote `→`.
 
 **What to do.** A parser that read raw bytes from captured commands or log
 lines should read `\xNN` escapes instead. An argument that holds a literal
@@ -109,13 +113,16 @@ entries. A process still on 2.14 does not remove an entry written by this
 version either. The collection membership itself is removed either way.
 
 When the identifier's bytes are not valid UTF-8, as for `"caf\xE9"`,
-`participating_ids_for_target`, `current_participations`, and
-`participating_in_target?` given collection names now raise `ArgumentError`
-for such a target, as they already did for a BINARY target identifier that
-is not valid UTF-8. `participating_in_target?` without collection names
-returns `true`. With 2.14, `participating_ids_for_target` returned an
-identifier that found no record and `current_participations` left the
-membership out.
+`current_participations`, and so `relationship_status`, now raise
+`ArgumentError` for any participant holding such an entry, so they no
+longer return its other memberships either. `participating_ids_for_target`
+raises for that target class, and `participating_in_target?` given
+collection names raises when it reaches the entry before a match. They
+already did so for a BINARY target identifier that is not valid UTF-8.
+`participating_in_target?` without collection names returns `true`. With
+2.14, `participating_ids_for_target` returned an identifier that found no
+record, and `current_participations` left the membership out and returned
+the participant's other memberships.
 
 When the bytes are valid UTF-8, as for `"\xC3\xA9t\xC3\xA9"` labelled
 ISO-8859-1, none of them raise. `participating_ids_for_target` returns the
@@ -166,25 +173,45 @@ some of them and not others:
   non-ASCII field value such as `'rôle'`. 2.14 loads such a record, but
   its `save` raises, and its `destroy!` raises before deleting anything,
   so the record's hash, its `_idx_scopes` and `participations` keys, and
-  its bucket membership stay. `health_check` and `audit_multi_indexes` of
-  the record's class raise.
+  its bucket membership stay. For a BINARY scope identifier,
+  `audit_multi_indexes`, `health_check` and `repair_all!` of the record's
+  class raise. For an ISO-8859-1 one they do not: `audit_multi_indexes`
+  reports the scope's buckets as `:field_value_unheld` orphans,
+  `health_check` reports the class unhealthy, and `repair_all!` returns
+  `:ok` and changes nothing.
 - **Records under a non-ASCII class prefix** (`prefix 'membré'`) whose
   identifier bytes are not valid UTF-8, given as BINARY or ISO-8859-1. 2.14
-  raises in `load` and `exists?`, in `find_by_id` and class `destroy!` given
-  the identifier read back from `instances`, and in `health_check` and
-  `repair_all!` of the class.
+  raises in `load` and `exists?`, and in `find_by_id` and class `destroy!`
+  given the identifier read back from `instances`. `health_check` and
+  `repair_all!` of the class raise only when such a record is a member of a
+  participation collection; otherwise they report the class healthy,
+  although its records cannot be loaded.
 - **Records whose indexed field value is not valid UTF-8**, given as BINARY
   (`"r\xFEle".b`), under a non-ASCII class prefix. 2.14 loads such a record,
-  but `health_check`, `audit_multi_indexes` and `repair_all!` of its class
-  raise, its `save` raises, and its `destroy!` raises and leaves the hash.
-  2.14 fails the same way for such a value under an ASCII prefix, which it
-  could write.
+  but `health_check` and `repair_all!` of its class raise, and so does
+  `audit_multi_indexes` or `audit_unique_indexes` for the kind of index on
+  the field. With a `multi_index` on the field, its `save` raises, and its
+  `destroy!` raises and leaves the hash. 2.14 fails the same way for such a
+  value under an ASCII prefix, which it could write.
 - **Participations reverse-index entries** for ISO-8859-1 targets, as
-  described above: 2.14 does not remove an entry this version wrote.
+  described above: 2.14 does not remove an entry this version wrote. When
+  the target identifier's bytes are not valid UTF-8, as for `"caf\xE9"`,
+  2.14's `current_participations`, `relationship_status` and
+  `participating_ids_for_target` of a participant holding such an entry
+  raise `ArgumentError`, so 2.14 no longer lists that participant's other
+  memberships either. Remove such a membership with this version
+  (`remove_from_<target>_<collection>`) before rolling back.
 
 2.14 changes nothing for these records when it raises. Running this
 version again makes them readable, savable and deletable again.
 
 **What to do.** Before rolling back, delete or migrate the records above, or
-plan to run this version again to remove them. Expect `health_check` and
-`repair_all!` of the affected classes to raise on 2.14 until they are gone.
+plan to run this version again to remove them. Delete a record whose own
+identifier is ISO-8859-1 with the class-level `destroy!(id)`, given the
+identifier as your application holds it or as read from `instances`, not
+through a loaded instance: the record loads with the transcoded UTF-8
+identifier (`"café"` for `"caf\xE9"`, as described above), so the loaded
+instance's `destroy!` targets another key and leaves the record. Do not
+rely on `health_check` or `repair_all!` on 2.14 to find these records: as
+described above, they raise for some of them and report others as healthy
+or as orphaned index buckets.

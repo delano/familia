@@ -29,23 +29,31 @@ Changed
   written as ``\xNN``, so a BINARY member ``"bad\xFF"`` reads ``bad\xFF``
   with a literal backslash and a BINARY argument with valid UTF-8 bytes
   reads as that text. Structured log lines are unchanged. PR #453
-- Familia log lines that name a key next to other text, the structured
-  context of ``Familia.debug``, ``Familia.info`` and ``Familia.error``,
-  ``Familia.trace`` output, and the ``HashKey`` store,
-  ``Familia::IdentifierMismatchError`` and dirty-write messages show a key or
+- The deserialization, ``find_by_id``, ``commit_fields``, ``refresh!``,
+  ``update_expiration``, ``serialize_value`` and ``HashKey`` write log lines,
+  the warning for an indexed field value longer than 256 characters, the
+  structured context of ``Familia.debug``, ``Familia.info`` and
+  ``Familia.error``, ``Familia.trace`` output, and the messages of the
+  ``TypeError`` a ``HashKey`` store raises, ``Familia::IdentifierMismatchError``,
+  ``WatchAbortError`` and the dirty-write warning and error show a key or
   value whose bytes are not valid UTF-8 with every invalid byte written as
-  ``\xNN``. The legacy JSON-encoded identifier warning writes ``->`` instead
-  of ``→``. PR #453
+  ``\xNN``. Other log lines that name a key, such as those of the atomic
+  index rebuild and of ``repair_participations!``, write its bytes as they
+  are. The legacy JSON-encoded identifier warning writes ``->`` instead of
+  ``→``. PR #453
 - The ``participations`` reverse-index entry for a target whose identifier is
   in an encoding other than UTF-8 or BINARY and has non-ASCII bytes, such as
   ISO-8859-1 ``"caf\xE9"``, holds the collection key's bytes. 2.13 and 2.14
   stored the key transcoded to UTF-8, which is not the collection's key.
   ``remove_from_<target>_<collection>`` does not remove an entry written by
   2.13 or 2.14, and adding the membership again leaves both. When such an
-  identifier's bytes are not valid UTF-8, ``participating_ids_for_target``,
-  ``current_participations``, and ``participating_in_target?`` given
-  collection names raise ``ArgumentError`` for the target, as they already
-  did for a BINARY target identifier that is not valid UTF-8. When they are
+  identifier's bytes are not valid UTF-8, ``current_participations``, and so
+  ``relationship_status``, raise ``ArgumentError`` for any participant
+  holding such an entry, so its other memberships are not returned either;
+  2.14 returned them. ``participating_ids_for_target`` raises for that
+  target class, and ``participating_in_target?`` given collection names
+  raises when it reaches the entry before a match. They already did so for
+  a BINARY target identifier that is not valid UTF-8. When the bytes are
   valid UTF-8, ``participating_ids_for_target`` returns them as a UTF-8
   identifier, which finds the target; 2.14 returned one that found no
   record. PR #453
@@ -93,17 +101,29 @@ Fixed
   ``save`` or ``destroy!`` of a record indexed in a scope whose identifier is
   not valid UTF-8. ``destroy!`` removes the record's index entries. PR #453
 - Reading a collection with non-ASCII members (``members``, ``each``,
-  ``revrange``), ``rebuild_<index>``, ``commit_fields`` and
-  ``HashKey#refresh!`` no longer raise ``Encoding::CompatibilityError`` for a
-  record or scope given a BINARY identifier that is not valid UTF-8. With
-  debug on, the same holds for ``find_by_id`` and collection writes. PR #453
+  ``revrange``), ``rebuild_<index>``, ``commit_fields``, ``HashKey#refresh!``,
+  ``Horreum#refresh!`` of a record with a legacy plain-string field value,
+  and reading a legacy JSON-encoded entry of a scope's ``unique_index`` or
+  ``multi_index`` (``[]``, ``get``, ``members``, ``find_by_<field>``,
+  ``find_all_by_<field>``) no longer raise ``Encoding::CompatibilityError``
+  for a record or scope given a BINARY identifier that is not valid UTF-8.
+  Nor does adding such a record of a class whose name holds non-ASCII text
+  to a collection. With debug on, the same holds for ``find_by_id`` and
+  collection writes. PR #453
+- ``atomic_write`` given ``watch_keys:`` that include a BINARY key with
+  non-ASCII bytes, such as the key of a record given ``"bin\xFE".b``, and a
+  non-ASCII UTF-8 key retries a WATCH conflict and raises
+  ``WatchAbortError`` when the retries run out, instead of raising
+  ``Encoding::CompatibilityError`` on the first conflict. PR #453
 - A record whose indexed field value is not valid UTF-8, such as a value
   given as BINARY ``"r\xFEle".b``, which loads back as UTF-8 with the same
-  bytes, no longer makes ``save`` and ``destroy!`` of the loaded record, or
-  ``audit_multi_indexes``, ``audit_unique_indexes``, ``health_check`` and
-  ``repair_all!`` of its class, raise ``ArgumentError`` or
-  ``Encoding::CompatibilityError``. The audits no longer report its index
-  entries as stale, missing and orphaned. PR #453
+  bytes, no longer makes ``save`` and ``destroy!`` of the loaded record with
+  a ``multi_index`` on that field, or ``audit_multi_indexes``,
+  ``audit_unique_indexes``, ``health_check`` and ``repair_all!`` of its
+  class, raise ``Encoding::CompatibilityError``. ``save`` and
+  ``find_all_by_<field>`` no longer raise it for a ``multi_index`` value
+  longer than 256 characters given as BINARY with non-ASCII bytes under a
+  class whose name holds non-ASCII text. PR #453
 - ``DatabaseLogger`` no longer raises ``Encoding::CompatibilityError`` after
   a command whose arguments are in incompatible encodings, or, with
   unstructured logging, after a command with a non-ASCII BINARY argument.
