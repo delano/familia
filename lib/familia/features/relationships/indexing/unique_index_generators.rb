@@ -348,14 +348,17 @@ module Familia
                 index_hash = scope_instance.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
 
-                # The index is a reference hash, so existing_id is the stored
-                # String. Compare it with the identifier's string form, or a
+                # An index Familia declared is a reference hash, so
+                # existing_id is the stored String; one the application
+                # declared itself deserializes JSON and returns an Integer
+                # identifier as an Integer. Compare the string forms, or a
                 # record with an Integer identifier is refused its own entry.
-                # Compare the bytes when the Strings differ: existing_id is
+                # Compare the bytes when the Strings differ: the stored one is
                 # BINARY when its bytes are not valid UTF-8, while a loaded
                 # record's identifier is UTF-8 with the same bytes.
                 owner = identifier.to_s
-                if existing_id && existing_id != owner && existing_id.b != owner.b
+                stored = existing_id.to_s
+                if existing_id && stored != owner && stored.b != owner.b
                   raise Familia::RecordExistsError.new(
                     "#{self.class} exists in #{scope_instance.class} with #{field}=#{field_value}",
                     existing_id: existing_id,
@@ -661,14 +664,17 @@ module Familia
                 index_hash = self.class.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
 
-                # The index is a reference hash, so existing_id is the stored
-                # String. Compare it with the identifier's string form, or a
+                # An index Familia declared is a reference hash, so
+                # existing_id is the stored String; one the application
+                # declared itself deserializes JSON and returns an Integer
+                # identifier as an Integer. Compare the string forms, or a
                 # record with an Integer identifier is refused its own entry.
-                # Compare the bytes when the Strings differ: existing_id is
+                # Compare the bytes when the Strings differ: the stored one is
                 # BINARY when its bytes are not valid UTF-8, while a loaded
                 # record's identifier is UTF-8 with the same bytes.
                 owner = identifier.to_s
-                if existing_id && existing_id != owner && existing_id.b != owner.b
+                stored = existing_id.to_s
+                if existing_id && stored != owner && stored.b != owner.b
                   raise Familia::RecordExistsError.new(
                     "#{self.class} exists #{field}=#{field_value}",
                     existing_id: existing_id,

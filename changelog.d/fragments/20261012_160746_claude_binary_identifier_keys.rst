@@ -61,7 +61,11 @@ Fixed
 - ``save`` of a loaded record whose identifier is not valid UTF-8 no longer
   raises ``Familia::RecordExistsError`` from ``guard_unique_<index>!`` or
   ``guard_unique_<scope>_<index>!`` against the record's own index entry. The
-  guards compare identifiers by their bytes. PR #453
+  guards compare identifiers by their bytes. Nor do they raise it against
+  the own entry of a record with an Integer identifier when the application
+  declared the index hashkey itself, before ``unique_index``; for another
+  record's entry in such an index they raise ``Familia::RecordExistsError``.
+  PR #453
 - ``audit_participations``, and so ``health_check``, of a class whose prefix
   holds non-ASCII characters no longer raise ``Encoding::CompatibilityError``
   when an identifier that is not valid UTF-8 is a member of a participation
