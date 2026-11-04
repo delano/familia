@@ -271,7 +271,7 @@ module Familia
         # from cascade entirely and persist independently.
         if self.class.relations?
           fields = self.class.related_fields_snapshot
-          Familia.debug "[update_expiration] #{self.class} has relations: #{fields.keys}"
+          _debug_update_expiration { "#{self.class} has relations: #{fields.keys}" }
           fields.each do |name, definition|
             # Skip relations explicitly excluded from expiration cascade
             next if definition.opts[:no_expiration]
@@ -283,7 +283,9 @@ module Familia
             rel_expiration = definition.opts[:default_expiration] || expiration
 
             obj = send(name)
-            Familia.debug "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{rel_expiration}"
+            _debug_update_expiration do
+              "Updating expiration for #{name} (#{Familia.loggable_text(obj.dbkey)}) to #{rel_expiration}"
+            end
             obj.update_expiration(expiration: rel_expiration)
           end
         end
@@ -293,7 +295,7 @@ module Familia
         # If zero, simply skip setting an expiry for this key. If we were to set
         # 0, Valkey/Redis would drop the key immediately.
         if expiration.zero?
-          Familia.debug "[update_expiration] No expiration for #{self.class} (#{dbkey})"
+          _debug_update_expiration { "No expiration for #{self.class} (#{Familia.loggable_text(dbkey)})" }
           return true
         end
 
@@ -310,6 +312,20 @@ module Familia
         # it's a boolean.
         expire(expiration)
       end
+
+      # Logs a step of #update_expiration when debug is on. The block builds
+      # the message, so nothing is built with debug off. Keys in it pass
+      # through Familia.loggable_text: a BINARY key next to a non-ASCII class
+      # or field name would raise Encoding::CompatibilityError.
+      #
+      # @yieldreturn [String] the message that follows the label
+      # @return [void]
+      def _debug_update_expiration
+        return unless Familia.debug?
+
+        Familia.debug "[update_expiration] #{yield}"
+      end
+      private :_debug_update_expiration
 
       # Get the remaining time to live for this object's data
       #
