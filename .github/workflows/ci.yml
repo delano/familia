@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels that pull request's earlier run. Other
+# events get a group of their own (the run id), so runs on main are never
+# cancelled or queued behind one another.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   # The repo's own bundle includes development and test gems, which can supply
   # a library that familia requires but does not declare (base64 arrived this
@@ -99,28 +106,38 @@ jobs:
           fi
           echo "$out"
 
+  # Every Ruby runs against one server, and the newest Ruby runs against each
+  # other server, so each extra server costs one parallel job rather than one
+  # job per Ruby. Redis 6.x is not listed: the suite uses commands that Redis
+  # added in 6.2 and 7.0 (SINTERCARD is 7.0).
   build:
     timeout-minutes: 10
 
     runs-on: ubuntu-24.04
 
-    continue-on-error: ${{ matrix.continue-on-error }}
-
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.2", "3.3", "3.4", "3.5", "4.0"]
-        continue-on-error: [false]
+        ruby: ["3.2", "3.3", "3.4", "4.0"]
+        server: ["valkey/valkey:8.1"]
+        include:
+          # Oldest maintained release lines.
+          - { ruby: "4.0", server: "valkey/valkey:7.2" }
+          - { ruby: "4.0", server: "redis:7.2" }
+          # Newest releases: a major tag moves to each new minor release.
+          - { ruby: "4.0", server: "valkey/valkey:9" }
+          - { ruby: "4.0", server: "redis:8" }
 
     services:
       redis:
-        image: valkey/valkey:8.1-bookworm
-        # Set health checks to wait until database server has started
+        image: ${{ matrix.server }}
+        # Wait until the server answers. The server starts in about a second,
+        # so a short interval keeps the job from idling before its first check.
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 10s
+          --health-interval 1s
           --health-timeout 3s
-          --health-retries 5
+          --health-retries 30
         ports:
           # https://docs.github.com/en/actions/using-containerized-services/creating-redis-service-containers#running-jobs-in-containers
           # Maps port 6379 on service container to 2525 on the host
@@ -151,6 +168,11 @@ jobs:
 
       - name: Re-run bundle install
         run: bundle install
+
+      - name: Show the server version
+        env:
+          SERVICE_ID: ${{ job.services.redis.id }}
+        run: docker exec "$SERVICE_ID" redis-cli INFO server | tr -d '\r' | grep -E '^(redis_version|valkey_version|server_name):'
 
       - name: Run the tryouts
         run: bundle exec try -vf
