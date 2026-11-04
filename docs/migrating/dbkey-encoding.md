@@ -109,8 +109,11 @@ identifiers in UTF-8 or BINARY are unchanged.
 
 After the upgrade, `remove_from_<target>_<collection>` does not remove an
 entry written by 2.13 or 2.14, and adding the membership again leaves both
-entries. A process still on 2.14 does not remove an entry written by this
-version either. The collection membership itself is removed either way.
+entries: `participating_ids_for_target`, `<target>_ids` and `<target>_count`
+then list the target twice, as `"café"` and `"caf\xE9".b`, until the old
+entry is removed (see **What to do** below). A process still on 2.14 does
+not remove an entry written by this version either. The collection
+membership itself is removed either way.
 
 The participation readers parse an entry by its bytes.
 `participating_ids_for_target` returns the identifier's bytes: as the BINARY
@@ -192,9 +195,10 @@ some of them and not others:
 - **Participations reverse-index entries** for ISO-8859-1 targets, as
   described above: 2.14 does not remove an entry this version wrote. When
   the target identifier's bytes are not valid UTF-8, as for `"caf\xE9"`,
-  2.14's `current_participations`, `relationship_status` and
-  `participating_ids_for_target` of a participant holding such an entry
-  raise `ArgumentError`, so 2.14 no longer lists that participant's other
+  2.14's `current_participations`, `relationship_status`,
+  `participating_ids_for_target`, `participating_in_target?` and the
+  generated `<target>_ids`, `<target>_instances` and `<target>_count` of a
+  participant holding such an entry raise `ArgumentError`, so 2.14 no longer lists that participant's other
   memberships either. Remove such a membership with this version
   (`remove_from_<target>_<collection>`) before rolling back.
 
