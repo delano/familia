@@ -28,13 +28,13 @@ module Familia
       #   serialize_value([1, 2, 3])   #=> "[1,2,3]"
       #
       def serialize_value(val)
-        Familia.trace :TOREDIS, nil, "#{val}<#{val.class}|#{opts[:class]}>" if Familia.debug?
+        Familia.trace :TOREDIS, nil, "#{Familia.loggable_text(val)}<#{val.class}|#{opts[:class]}>" if Familia.debug?
 
         # Priority 1: Handle Familia object references - extract identifier
         # This preserves the existing behavior for storing object references
         if val.is_a?(Familia::Base) || (val.is_a?(Class) && val.ancestors.include?(Familia::Base))
           prepared = val.is_a?(Class) ? val.name : val.identifier
-          Familia.debug "  Familia object: #{val.class} => #{prepared}"
+          debug_serialization { "  Familia object: #{val.class} => #{Familia.loggable_text(prepared)}" }
           return prepared
         end
 
@@ -43,14 +43,14 @@ module Familia
         # mismatches when callers pass identifier strings directly instead of
         # Familia objects.
         if val.is_a?(String) && opts[:reference]
-          Familia.debug "  String identifier (reference): #{val}"
+          debug_serialization { "  String identifier (reference): #{Familia.loggable_text(val)}" }
           return val
         end
 
         # Priority 2: Everything else gets JSON serialized for type preservation
         # This unifies behavior with Horreum fields (Issue #190)
         prepared = Familia::JsonSerializer.dump(val)
-        Familia.debug "  JSON serialized: #{val.class} => #{prepared}"
+        debug_serialization { "  JSON serialized: #{val.class} => #{Familia.loggable_text(prepared)}" }
 
         if Familia.debug?
           Familia.trace :TOREDIS, nil, "#{Familia.loggable_text(val)}<#{val.class}> => " \
@@ -191,6 +191,20 @@ module Familia
       end
 
       private
+
+      # Logs a #serialize_value step when debug is on. The block builds the
+      # message, so nothing is built with debug off. Values in it pass
+      # through Familia.loggable_text: an identifier that is BINARY with
+      # bytes that are not valid UTF-8, next to a non-ASCII class name,
+      # would raise Encoding::CompatibilityError.
+      #
+      # @yieldreturn [String] the message
+      # @return [void]
+      def debug_serialization
+        return unless Familia.debug?
+
+        Familia.debug yield
+      end
 
       # Log a non-JSON value encountered while deserializing.
       #
